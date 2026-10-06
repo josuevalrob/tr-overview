@@ -61,7 +61,9 @@ The monthly *Account statement* is a PDF with net amounts only (no fee, no tax) 
 ## Your data
 
 - Uploaded exports are saved, untouched, in **`data/`** next to the app (`DATA_DIR=/some/folder` to
-  move it). Followed stocks go to `data/watchlist.json`. Delete a file to undo an upload.
+  move it). An older export whose every row is in the new one is replaced, so a fresh "all time"
+  export leaves a single file. Followed stocks go to `data/watchlist.json`. Delete a file to undo an upload.
+- Nothing else is stored: prices, history, analysis and news live in memory and are gone on restart.
 - `data/` is in `.gitignore`, as is every `*.csv` except the made-up `public/sample.csv` — your
   transactions can never end up in a commit.
 - The server listens on `127.0.0.1` only. What leaves your machine: price requests to onvista (by

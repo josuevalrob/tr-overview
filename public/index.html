@@ -1047,7 +1047,7 @@ async function upload(files) {
     const texts = await Promise.all(files.map(async f => ({ name: f.name, text: await f.text() })));
     const r = await api('/api/upload', post({ files: texts }));
     toast(r.files.map(f => f.ok
-      ? `<b>${esc(f.file)}</b>: ${f.added ? `${f.added} new of ${f.rows} rows, saved as data/${esc(f.savedAs)}` : esc(f.note)}`
+      ? `<b>${esc(f.file)}</b>: ${f.savedAs ? `${f.added} new of ${f.rows} rows, saved as data/${esc(f.savedAs)}${f.replaced ? ` (replaces ${f.replaced.map(esc).join(', ')})` : ''}` : esc(f.note)}`
       : `<b>${esc(f.file)}</b>: <span class="down">${esc(f.reason)}</span>`).join('<br>'), 9000);
     S.preview = null; S.news = null;
     await loadSummary();
