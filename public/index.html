@@ -148,6 +148,19 @@
   .alloc .bar{height:14px;border-radius:0 4px 4px 0;background:var(--s1);min-width:2px}
   .alloc .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   .alloc .num small{color:var(--muted);margin-left:8px}
+  .contrib{display:grid;grid-template-columns:minmax(90px,170px) 1fr auto;gap:8px 12px;align-items:center;font-size:13px}
+  .contrib .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+  .contrib .lbl small{display:block;color:var(--muted);font-size:11.5px;line-height:1.2}
+  .contrib .dv{display:grid;grid-template-columns:1fr 1fr;height:14px}
+  .contrib .dv > span{display:flex;height:14px}
+  .contrib .dv > span:first-child{justify-content:flex-end}
+  .contrib .dv > span:last-child{border-left:1px solid var(--axis)}
+  .contrib .dv i{display:block;height:14px;min-width:2px}
+  .contrib .dv .n{background:var(--neg);border-radius:4px 0 0 4px}
+  .contrib .dv .p{background:var(--pos);border-radius:0 4px 4px 0}
+  .contrib .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .contrib .num small{color:var(--muted);margin-left:8px}
+  .contrib .total{border-top:1px solid var(--line);padding-top:8px;font-weight:600}
   .pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
   .pair > .card{margin-bottom:0;min-width:0}
   @media (max-width:900px){ .pair{grid-template-columns:1fr} }
@@ -459,17 +472,24 @@ function renderToday() {
       </table></div>
     </div>`;
   el.insertAdjacentHTML('beforeend', `
-    <div class="card">
-      <div class="row"><div><h2>Allocation</h2><p class="sub" style="margin:0" id="alloc-note"></p></div>
-        <div class="seg" id="alloc-by"><button data-a="position">Position</button><button data-a="sector">Sector</button><button data-a="country">Country</button></div></div>
-      <div class="alloc" id="alloc"></div>
+    <div class="pair">
+      <div class="card">
+        <h2>Today's move by position</h2>
+        <p class="sub" id="contrib-note"></p>
+        <div class="contrib" id="contrib"></div>
+      </div>
+      <div class="card">
+        <div class="row"><div><h2>Allocation</h2><p class="sub" style="margin:0" id="alloc-note"></p></div>
+          <div class="seg" id="alloc-by"><button data-a="position">Position</button><button data-a="sector">Sector</button><button data-a="country">Country</button></div></div>
+        <div class="alloc" id="alloc"></div>
+      </div>
     </div>`);
   el.querySelectorAll('tr[data-key]').forEach(tr => tr.onclick = () => openAnalysis(tr.dataset.key));
   el.querySelectorAll('.gain').forEach(c => c.onclick = ev => {
     ev.stopPropagation();                                // a gain cell switches € / %, it does not open the sidebar
     G.pct = !G.pct; store.set('tro.gainpct', G.pct ? '1' : ''); renderToday();
   });
-  renderDepotChart(); renderIntraday(); renderAllocation();
+  renderDepotChart(); renderIntraday(); renderContrib(); renderAllocation();
 }
 
 // ------------------------------------------------------------ months
@@ -947,6 +967,37 @@ function renderIntraday() {
       + tipRow('vs yesterday', `<span class="${dir(p[1] - base)}">${signed(p[1] - base)}</span>`));
   };
   svg.onpointerleave = () => { hideTip(); cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); };
+}
+
+/**
+ * Contribution to today's return: each position's euro move divided by yesterday's value
+ * of the whole depot. In percentage points, so the rows add up to the total exactly -
+ * own move x weight. Diverging bars around zero, winners on top.
+ */
+function renderContrib() {
+  const d = S.data, host = $('#contrib');
+  if (!host) return;
+  const pos = d.positions.filter(p => p.day != null);
+  const base = pos.reduce((s, p) => s + (p.value - p.day), 0);
+  if (!pos.length || !base) { host.innerHTML = '<span class="muted">No prices yet.</span>'; return; }
+  const rows = pos.map(p => ({ key: p.key, name: p.name, own: p.dayPct, day: p.day, pp: (p.day / base) * 100 }))
+                  .sort((a, b) => b.pp - a.pp);
+  const max = Math.max(...rows.map(r => Math.abs(r.pp))) || 1;
+  const pp = v => `${v > 0 ? '+' : v < 0 ? '−' : ''}${nf(2, 2).format(Math.abs(v))} pp`;
+  const bar = v => `<span class="dv">
+      <span>${v < 0 ? `<i class="n" style="width:${(Math.abs(v) / max) * 100}%"></i>` : ''}</span>
+      <span>${v > 0 ? `<i class="p" style="width:${(v / max) * 100}%"></i>` : ''}</span></span>`;
+  const total = rows.reduce((s, r) => s + r.pp, 0), totalEur = rows.reduce((s, r) => s + r.day, 0);
+  host.innerHTML = rows.map(r => `<span class="lbl" data-key="${esc(r.key)}" title="${esc(r.name)}">${esc(r.name)}<small>${arrow(r.own)} ${pct(r.own)} itself</small></span>
+      ${bar(r.pp)}
+      <span class="num"><span class="${dir(r.pp)}">${pp(r.pp)}</span><small>${signed(r.day)}</small></span>`).join('')
+    + `<span class="lbl total">Total</span><span class="total"></span>
+       <span class="num total"><span class="${dir(total)}">${pct(total)}</span><small>${signed(totalEur)}</small></span>`;
+  const down = rows.filter(r => r.pp < 0).sort((a, b) => a.pp - b.pp)[0], up = rows[0];
+  $('#contrib-note').textContent = `How much each position moved the depot today, in points of the total ${pct(total)}. `
+    + (down && down.pp < 0 ? `Biggest drag: ${down.name} (${pp(down.pp)}). ` : '')
+    + (up && up.pp > 0 ? `Biggest lift: ${up.name} (${pp(up.pp)}).` : '');
+  host.querySelectorAll('.lbl[data-key]').forEach(l => l.onclick = () => openAnalysis(l.dataset.key));
 }
 
 function renderAllocation() {

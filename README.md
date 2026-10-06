@@ -5,7 +5,7 @@ your own machine, keep your data there. No account login, no database, no depend
 
 | Tab | |
 |---|---|
-| **Today** | every open position at the live LS Exchange price: today's move, value, paid, gain, weight; stocks + crypto over time (1W–All) beside today's line against yesterday's close; allocation by position, sector, country |
+| **Today** | every open position at the live LS Exchange price: today's move, value, paid, gain, weight; stocks + crypto over time (1W–All) beside today's line against yesterday's close; today's move by position (contribution in points, adding up to the total) beside allocation by position, sector, country |
 | **Months** | what the account earned so far, stocks value vs cost, what each month earned, a month-by-month table |
 | **Taxes** | the Sparer-Pauschbetrag used per year, an estimate to 31 Dec, "if you sold everything today", stock sales (FIFO), crypto holding periods |
 | **News** | Google News headlines (English / German) for every holding, plus any stock you choose to follow |

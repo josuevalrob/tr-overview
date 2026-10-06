@@ -80,13 +80,17 @@ const TOOLS = [
   },
   {
     name: 'positions',
-    description: 'Every open position at the live LS Exchange price (EUR): shares, price, today\'s move, value, paid, gain since bought (€ and %), weight, sector, country.',
+    description: 'Every open position at the live LS Exchange price (EUR): shares, price, today\'s move, its contribution to the depot\'s move today (percentage points, adding up to the total), value, paid, gain since bought (€ and %), weight, sector, country.',
     inputSchema: { type: 'object', properties: {} },
     async run() {
       const d = await app.summary({});
       if (d.empty) return { positions: [] };
+      // contribution to today's return: euro move / yesterday's value of the whole depot
+      const base = d.positions.reduce((s, p) => s + (p.day != null ? p.value - p.day : 0), 0);
       return { as_of: d.positions.map(p => p.at).filter(Boolean).sort().pop() ?? null,
-               positions: d.positions.map(p => position(p, d.profiles)) };
+               depot_today_pct: r2(d.dayPct), depot_today_eur: e(d.day),
+               positions: d.positions.map(p => ({ ...position(p, d.profiles),
+                 today_contribution_pp: p.day != null && base ? r2((p.day / base) * 100 * 100) / 100 : null })) };
     },
   },
   {
