@@ -10,7 +10,7 @@
  * (Google News), by instrument name - never your transactions. The logic is in lib/app.mjs,
  * shared with mcp.mjs (the same depot for agents).
  *
- *   GET    /api/summary?joint=0|1&church=0|0.08|0.09   positions, months, tax per year
+ *   GET    /api/summary?joint=0|1&church=0|0.08|0.09&live=1   positions, months, tax; live=1: prices under a minute old
  *   POST   /api/upload       {files:[{name,text}]}      save Trade Republic exports into data/
  *   POST   /api/preview      {text, settings}           summary of one CSV, nothing saved (sample)
  *   GET    /api/news?lang=en|de                         headlines for holdings + followed stocks
@@ -51,7 +51,7 @@ const TYPES = { html: 'text/html', css: 'text/css', js: 'text/javascript', svg: 
 async function api(req, url) {
   const part = url.pathname.split('/').slice(2);              // ['summary'] | ['watchlist', key]
   const settings = { joint: url.searchParams.get('joint') === '1', church: Number(url.searchParams.get('church') || 0) };
-  if (req.method === 'GET' && part[0] === 'summary') return app.summary(settings);
+  if (req.method === 'GET' && part[0] === 'summary') return app.summary(settings, undefined, { maxAge: url.searchParams.get('live') === '1' ? 55 * 1000 : undefined });
   if (req.method === 'GET' && part[0] === 'intraday') return (await app.intraday(55 * 1000)) ?? {};
   if (req.method === 'POST' && part[0] === 'upload') {
     const { files = [] } = await readJson(req);

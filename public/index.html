@@ -1076,7 +1076,7 @@ function renderMeta() {
   const d = S.data;
   const quoted = d.positions.map(p => p.at).filter(Boolean).sort().pop();
   $('#meta').innerHTML = `${S.preview ? '<b>Sample data</b> (not saved) · <a href="#" id="endsample">back to my data</a> · ' : ''}`
-    + `Transactions up to ${esc(day(d.asOf))} · prices ${quoted ? `at ${esc(time(quoted))}` : 'unavailable'} · refreshes every 5 min`;
+    + `Transactions up to ${esc(day(d.asOf))} · prices ${quoted ? `at ${esc(time(quoted))}` : 'unavailable'} · ${S.preview ? 'sample' : 'live, updates every minute'}`;
   const end = $('#endsample');
   if (end) end.onclick = ev => { ev.preventDefault(); S.preview = null; S.news = null; loadSummary(); };
   const stale = (Date.parse(d.today) - Date.parse(d.asOf)) / 864e5;
@@ -1085,9 +1085,9 @@ function renderMeta() {
   if (d.errors?.length) b.push(`<div class="banner">${d.errors.map(esc).join('<br>')}</div>`);
   $('#banners').innerHTML = b.join('');
 }
-async function loadSummary() {
+async function loadSummary(live = false) {
   try {
-    const q = `joint=${S.settings.joint ? 1 : 0}&church=${Number(S.settings.church) || 0}`;
+    const q = `joint=${S.settings.joint ? 1 : 0}&church=${Number(S.settings.church) || 0}${live ? '&live=1' : ''}`;
     S.data = S.preview
       ? await api('/api/preview', post({ text: S.preview, settings: S.settings }))
       : await api(`/api/summary?${q}`);
@@ -1095,17 +1095,19 @@ async function loadSummary() {
     document.body.classList.remove('empty');
     $('#empty').hidden = true;
     renderMeta(); renderToday(); renderMonths(); renderTaxes();
-    // holdings may have changed: news follows them
-    if ($('#tab-news').classList.contains('on')) loadNews(); else S.news = null;
+    // holdings may have changed: news follows them (not on the minute tick - headlines move slower)
+    if (!live) { if ($('#tab-news').classList.contains('on')) loadNews(); else S.news = null; }
+    else if (S.news) renderNews();
   } catch (e) { $('#meta').innerHTML = `<span class="down">${esc(e.message)}</span>`; }
 }
 let resizeT;
 addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { renderMonths(); if (S.data && !S.data.empty) { renderDepotChart(); renderIntraday(); } }, 150); });
-setInterval(() => { if (document.visibilityState === 'visible') loadSummary(); }, 5 * 60 * 1000);
-// live: the Today card gets a fresh point every minute while it is on screen
-setInterval(async () => {
-  if (document.visibilityState !== 'visible' || S.preview || !S.data || S.data.empty || !$('#c-intraday') || !$('#tab-today').classList.contains('on')) return;
-  try { S.data.intraday = await api('/api/intraday'); renderIntraday(); } catch { /* next minute */ }
+// live: every number on the page refreshes every minute while it is on screen, with prices
+// under a minute old - the same request also records the Today line's next point
+setInterval(() => {
+  if (document.visibilityState !== 'visible' || S.preview || !S.data || S.data.empty) return;
+  if (document.querySelector('#drop.on')) return;                 // not in the middle of a drop
+  loadSummary(true);
 }, 60 * 1000);
 addEventListener('hashchange', () => showTab(location.hash.slice(1)));
 showTab(location.hash.slice(1));
