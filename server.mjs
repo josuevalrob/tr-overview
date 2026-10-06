@@ -7,7 +7,8 @@
  * Runs on your machine only. Your exports, followed stocks and settings live in ./data
  * (DATA_DIR to move it), which git ignores. No database, no account, no dependencies.
  * Only public market data leaves the machine as requests: prices (onvista) and headlines
- * (Google News), by instrument name - never your transactions.
+ * (Google News), by instrument name - never your transactions. The logic is in lib/app.mjs,
+ * shared with mcp.mjs (the same depot for agents).
  *
  *   GET    /api/summary?joint=0|1&church=0|0.08|0.09   positions, months, tax per year
  *   POST   /api/upload       {files:[{name,text}]}      save Trade Republic exports into data/
@@ -24,26 +25,13 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadAll, mergeExports, parseExport, isTrExport, replay, holdings, positionsNow, months,
-         taxYear, taxSettings, years, trades, daily } from './lib/portfolio.mjs';
-import { quote, closes, search, pool } from './lib/market.mjs';
-import { headlines } from './lib/news.mjs';
-import { analysis, profile } from './lib/analysis.mjs';
+import { createApp } from './lib/app.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const PUB  = path.join(HERE, 'public');
-const DATA = path.resolve(process.env.DATA_DIR || path.join(HERE, 'data'));
-const WATCH = path.join(DATA, 'watchlist.json');
-const INTRADAY = path.join(DATA, 'intraday.json');
 const PORT = Number(process.env.PORT || 3000);
 const MAX_BODY = 20 * 1024 * 1024;
-
-const berlinToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date());
-const titleCase = s => (s === s.toUpperCase() ? s.toLowerCase().replace(/\b\p{L}/gu, c => c.toUpperCase()) : s);
-const rowKey = r => `${r.at}|${r.type}|${r.amount}|${r.key}|${r.shares}`;
-
-const readWatch = () => { try { return JSON.parse(fs.readFileSync(WATCH, 'utf8')); } catch { return []; } };
-const writeWatch = list => { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(WATCH, JSON.stringify(list, null, 2) + '\n'); };
+const app  = createApp({ dataDir: process.env.DATA_DIR || path.join(HERE, 'data') });
 
 const readJson = req => new Promise((resolve, reject) => {
   const chunks = [];
@@ -57,193 +45,41 @@ const readJson = req => new Promise((resolve, reject) => {
   req.on('error', reject);
 });
 
-async function quotesFor(keys, maxAge) {
-  const out = {};
-  await pool(keys, 4, async k => {
-    try { out[k] = await quote(k, maxAge); } catch (e) { out[k] = { error: e.message }; }
-  });
-  return out;
-}
-
-// ---------------------------------------------------------------- intraday
-// onvista does not serve intraday charts to scripts (403, terms of use), so the day's line
-// is recorded here: every minute while the page is open (it polls /api/intraday), every
-// 5 minutes otherwise. One file, started fresh each day. Your own data only, never the sample.
-const berlinMinute = () => {
-  const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', hour12: false })
-    .format(new Date()).split(':').map(Number);
-  return h * 60 + m;
-};
-const readIntraday = () => { try { return JSON.parse(fs.readFileSync(INTRADAY, 'utf8')); } catch { return null; } };
-
-/** Value and previous close of what is held now, from live quotes. */
-async function depotNow(rows, maxAge) {
-  const hs = holdings(replay(rows));
-  if (!hs.length) return null;
-  const q = await quotesFor(hs.map(h => h.key), maxAge);
-  let value = 0, prev = 0;
-  for (const h of hs) {
-    if (!q[h.key] || q[h.key].error) return null;      // a hole would draw a fake drop
-    value += h.shares * q[h.key].last;
-    prev += h.shares * (q[h.key].prev ?? q[h.key].last);
-  }
-  return { value: Math.round(value * 100), prev: Math.round(prev * 100) };
-}
-
-async function sampleIntraday(maxAge) {
-  try {
-    const now = await depotNow(loadAll(DATA).rows, maxAge);
-    if (!now) return;
-    const date = berlinToday(), m = berlinMinute();
-    let day = readIntraday();
-    if (day?.date !== date) day = { date, points: [] };
-    day.prevClose = now.prev;
-    const last = day.points.at(-1);
-    if (last && m - last[0] < 1) last[1] = now.value;   // same minute: update, don't add
-    else day.points.push([m, now.value]);
-    fs.mkdirSync(DATA, { recursive: true });
-    fs.writeFileSync(INTRADAY, JSON.stringify(day));
-  } catch { /* a missed sample is just a missing point */ }
-}
-
-async function summary(settings, merged = loadAll(DATA)) {
-  const today = berlinToday();
-  const { rows, files, first, last } = merged;
-  if (!rows.length) return { empty: true, today };
-  const st = replay(rows);
-  const traded = [...new Set(rows.filter(r => r.type === 'BUY' || r.type === 'SELL').map(r => r.key))];
-  const firstTrade = rows.find(r => r.type === 'BUY')?.date ?? first;
-  const quotes = await quotesFor(holdings(st).map(h => h.key));
-  const series = {}, errors = [];
-  await pool(traded, 4, async k => {
-    try { series[k] = await closes(k, firstTrade); }
-    catch (e) { series[k] = []; errors.push(`${st.meta.get(k)?.name ?? k}: price history unavailable (${e.message})`); }
-  });
-  const pos = positionsNow(st, quotes);
-  const profiles = {};
-  await pool(pos.positions.map(p => p.key), 4, async k => {
-    try { profiles[k] = await profile(k); } catch { profiles[k] = { sector: 'Unknown', country: 'Unknown' }; }
-  });
-  const tax = taxSettings(settings);
-  const cur = Number(today.slice(0, 4));
-  const ys = years(rows);
-  if (!ys.includes(cur)) ys.push(cur);
-  return {
-    today, asOf: last, first, files, rowCount: rows.length, cash: st.cash, paidIn: st.paidIn, settings: tax,
-    ...pos,
-    months: months(rows, series, quotes, today),
-    daily: daily(rows, series, quotes, today),
-    trades: trades(rows),
-    profiles,
-    tax: Object.fromEntries(ys.map(y => [y, taxYear(rows, y, y === cur ? pos : null, today, tax)])),
-    intraday: merged.files?.includes?.('preview.csv') ? null : (await sampleIntraday(), readIntraday()),
-    errors: errors.concat(pos.missing.map(n => `${n}: no live price`)),
-  };
-}
-
-/** Exports are saved untouched; delete a file from data/ to undo an upload. */
-function upload(files) {
-  fs.mkdirSync(DATA, { recursive: true });
-  const have = loadAll(DATA);
-  const ids = new Set(have.rows.map(r => r.id)), alts = new Set(have.rows.map(rowKey));
-  return files.map(f => {
-    if (!isTrExport(f.text)) return { file: f.name, ok: false, reason: 'not a Trade Republic transaction export' };
-    const rows = parseExport(f.text);
-    if (!rows.length) return { file: f.name, ok: false, reason: 'no transactions in it' };
-    const added = rows.filter(r => !ids.has(r.id) && !alts.has(rowKey(r))).length;
-    if (!added) return { file: f.name, ok: true, rows: rows.length, added: 0, note: 'already have every row' };
-    const dates = rows.map(r => r.date).sort();
-    const span = `${dates[0]}_${dates.at(-1)}`;
-    let name = `tr-${span}.csv`;
-    for (let i = 2; fs.existsSync(path.join(DATA, name)); i++) name = `tr-${span}-${i}.csv`;
-    fs.writeFileSync(path.join(DATA, name), f.text);
-    rows.forEach(r => { ids.add(r.id); alts.add(rowKey(r)); });
-    return { file: f.name, ok: true, rows: rows.length, added, savedAs: name };
-  });
-}
-
-async function news(lang, given) {
-  const subjects = given
-    ? given.filter(s => s && s.key && s.name).map(s => ({ key: String(s.key), name: String(s.name), held: !!s.held }))
-    : holdings(replay(loadAll(DATA).rows)).map(h => ({ key: h.key, name: h.name, held: true }))
-        .concat(readWatch().map(w => ({ key: w.key, name: w.name, held: false })));
-  const seen = new Set(), unique = subjects.filter(s => !seen.has(s.key) && seen.add(s.key)).slice(0, 40);
-  const items = [], errors = [];
-  await pool(unique, 4, async s => {
-    try { for (const h of await headlines(s.name, lang)) items.push({ ...h, key: s.key, name: s.name }); }
-    catch (e) { errors.push(`${s.name}: ${e.message}`); }
-  });
-  items.sort((a, b) => b.at.localeCompare(a.at));
-  return { subjects: unique, items, errors };
-}
-
 const TYPES = { html: 'text/html', css: 'text/css', js: 'text/javascript', svg: 'image/svg+xml',
                 png: 'image/png', json: 'application/json', csv: 'text/csv', ico: 'image/x-icon' };
 
 async function api(req, url) {
   const part = url.pathname.split('/').slice(2);              // ['summary'] | ['watchlist', key]
   const settings = { joint: url.searchParams.get('joint') === '1', church: Number(url.searchParams.get('church') || 0) };
-  const lang = url.searchParams.get('lang') === 'de' ? 'de' : 'en';
-  if (req.method === 'GET' && part[0] === 'summary') return [200, await summary(settings)];
-  if (req.method === 'GET' && part[0] === 'intraday') { await sampleIntraday(55 * 1000); return [200, readIntraday() ?? {}]; }
+  if (req.method === 'GET' && part[0] === 'summary') return app.summary(settings);
+  if (req.method === 'GET' && part[0] === 'intraday') return (await app.intraday(55 * 1000)) ?? {};
   if (req.method === 'POST' && part[0] === 'upload') {
     const { files = [] } = await readJson(req);
-    return [200, { files: upload(files.map(f => ({ name: String(f.name || 'export.csv'), text: String(f.text || '') }))) }];
+    return { files: app.upload(files.map(f => ({ name: String(f.name || 'export.csv'), text: String(f.text || '') }))) };
   }
   if (req.method === 'POST' && part[0] === 'preview') {
     const { text = '', settings: s = {} } = await readJson(req);
-    const m = mergeExports([{ name: 'preview.csv', text: String(text) }]);
-    if (!m.rows.length) return [400, { error: m.files[0]?.reason || 'no transactions in it' }];
-    return [200, { ...(await summary(s, { ...m, files: ['preview.csv'] })), preview: true }];
+    return app.preview(text, s);
   }
   if (part[0] === 'news') {
     const body = req.method === 'POST' ? await readJson(req) : {};
-    return [200, await news(body.lang === 'de' ? 'de' : body.lang ? 'en' : lang, body.subjects)];
+    return app.news(body.lang ?? url.searchParams.get('lang'), body.subjects);
   }
-  if (req.method === 'GET' && part[0] === 'analysis' && part[1]) return [200, await analysis(decodeURIComponent(part[1]))];
-  if (req.method === 'GET' && part[0] === 'history' && part[1]) {
-    const from = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('from') || '') ? url.searchParams.get('from')
-               : new Date(Date.now() - 5 * 365 * 864e5).toISOString().slice(0, 10);
-    const key = decodeURIComponent(part[1]);
-    const series = (await closes(key, from)).filter(([d]) => d >= from);
-    let live = null;
-    try { live = await quote(key); } catch { /* history alone is fine */ }
-    return [200, { key, from, closes: series, live }];
-  }
+  if (req.method === 'GET' && part[0] === 'analysis' && part[1]) return app.analysis(decodeURIComponent(part[1]));
+  if (req.method === 'GET' && part[0] === 'history' && part[1]) return app.history(decodeURIComponent(part[1]), url.searchParams.get('from'));
   if (part[0] === 'watchlist') {
-    if (req.method === 'GET') {
-      const list = readWatch(), q = await quotesFor(list.map(w => w.key));
-      return [200, { items: list.map(w => ({ ...w, quote: q[w.key] })) }];
-    }
-    if (req.method === 'POST') {
-      const text = String((await readJson(req)).query || '').trim();
-      if (!text) return [400, { error: 'type a name or an ISIN' }];
-      const hit = (await search(text))[0];
-      if (!hit) return [404, { error: `nothing found for "${text}"` }];
-      const list = readWatch();
-      if (list.some(w => w.key === hit.key)) return [409, { error: `${titleCase(hit.name)} is already on the list` }];
-      const item = { key: hit.key, name: titleCase(hit.name), isin: hit.isin, type: hit.type, added: berlinToday() };
-      await quote(item.key);                                  // refuse a name that cannot be priced
-      writeWatch([...list, item]);
-      return [200, item];
-    }
-    if (req.method === 'DELETE' && part[1]) {
-      const key = decodeURIComponent(part[1]);
-      writeWatch(readWatch().filter(w => w.key !== key));
-      return [200, { ok: true }];
-    }
+    if (req.method === 'GET') return { items: await app.watchlist.list() };
+    if (req.method === 'POST') return app.watchlist.add((await readJson(req)).query);
+    if (req.method === 'DELETE' && part[1]) return app.watchlist.remove(decodeURIComponent(part[1]));
   }
-  return [404, { error: 'not found' }];
+  throw Object.assign(new Error('not found'), { status: 404 });
 }
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const json = (code, o) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
   try {
-    if (url.pathname.startsWith('/api/')) {
-      const [code, body] = await api(req, url);
-      return json(code, body);
-    }
+    if (url.pathname.startsWith('/api/')) return json(200, await api(req, url));
     if (req.method === 'GET') {
       const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
       const f = path.join(PUB, path.normalize(rel));
@@ -255,11 +91,11 @@ const server = http.createServer(async (req, res) => {
     }
     json(404, { error: 'not found' });
   } catch (e) {
-    json(500, { error: e.message });
+    json(e.status || 500, { error: e.message });
   }
 });
 
 // localhost only: this serves your portfolio, it is not meant for the network
-server.listen(PORT, '127.0.0.1', () => console.log(`tr-overview  http://localhost:${PORT}   data: ${DATA}`));
-sampleIntraday();
-setInterval(sampleIntraday, 5 * 60 * 1000);
+server.listen(PORT, '127.0.0.1', () => console.log(`tr-overview  http://localhost:${PORT}   data: ${app.dataDir}`));
+app.intraday();
+setInterval(() => app.intraday(), 5 * 60 * 1000);

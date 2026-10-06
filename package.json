@@ -7,6 +7,7 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node server.mjs",
+    "mcp": "node mcp.mjs",
     "check": "node scripts/check.mjs"
   }
 }

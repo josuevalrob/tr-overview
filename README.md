@@ -24,6 +24,32 @@ npm run check              # offline checks of the model against the sample
 
 Open the page, then either **Try with sample data** (shown, never saved) or upload your own export.
 
+## For agents (MCP)
+
+`mcp.mjs` is an MCP server over stdio, so Claude Code, Claude Desktop or any MCP client can work with
+the same depot — no web server needed, no dependencies.
+
+```bash
+claude mcp add tr-overview -- node /absolute/path/to/tr-overview/mcp.mjs
+```
+
+| Tool | |
+|---|---|
+| `overview` | value, paid, gain, today's move, cash, total, export freshness — start here |
+| `positions` | every position with live price, today, value, gain € / %, weight, sector, country |
+| `performance` | result over 1W / 1M / YTD / 1Y / All, optionally the daily series |
+| `today_intraday` | today's recorded line against yesterday's close |
+| `months` | month-by-month table |
+| `taxes` | Sparer-Pauschbetrag for a year, estimate to 31 Dec, sell-all scenario, sales, crypto (joint / church tax options) |
+| `stock_analysis` | financials, analysts, events, dividends + your position and trades — stock by name or ISIN |
+| `price_history` | daily closes with your buys and sells |
+| `news` | headlines for holdings, followed stocks, or one stock |
+| `watchlist` | list / add / remove followed stocks |
+| `search_instrument` | find a stock, ETF or crypto |
+| `import_export` | import a Trade Republic CSV from a file path |
+
+Stocks can be named loosely ("uber", "meta"). Amounts are euros.
+
 ## Getting the export
 
 In Trade Republic: **Statements → Transaction export** (CSV). Export all time, or any range —
@@ -79,7 +105,9 @@ no other capital income, no Vorabpauschale. An estimate, not tax advice.
 ## Layout
 
 ```
-server.mjs          local HTTP server: the page + /api/{summary,upload,preview,news,watchlist}
+server.mjs          local HTTP server: the page + /api/*
+mcp.mjs             MCP server (stdio) for agents
+lib/app.mjs         everything the app does over the data folder - shared by both
 data/               your exports and followed stocks (git-ignored)
 lib/portfolio.mjs   merge exports, FIFO lots, positions, months, tax
 lib/market.mjs      onvista: ISIN -> LS Exchange quote, daily closes
