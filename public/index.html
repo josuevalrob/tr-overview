@@ -143,6 +143,13 @@
   .steps b{color:var(--ink)}
   body.empty nav.tabs, body.empty section.tab{display:none !important}
   .settings{display:flex;gap:10px 18px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink2);margin-top:12px}
+  .alloc{display:grid;grid-template-columns:minmax(90px,180px) 1fr auto;gap:8px 12px;align-items:center;font-size:13px}
+  .alloc .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .alloc .bar{height:14px;border-radius:0 4px 4px 0;background:var(--s1);min-width:2px}
+  .alloc .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .alloc .num small{color:var(--muted);margin-left:8px}
+  .range-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin:2px 0 10px}
+  .range-head .v{font-size:22px;font-weight:600}
   tr.clickable{cursor:pointer}
   tr.clickable:hover td{background:var(--wash)}
   #side{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--surface);border-left:1px solid var(--line);
@@ -418,6 +425,12 @@ function renderToday() {
       </div>
     </div>
     <div class="card">
+      <div class="row" style="margin-bottom:4px"><h2>Stocks + crypto over time</h2>${rangeSeg('depot-range', ['1W', '1M', 'YTD', '1Y', 'All'], D.range)}</div>
+      <div class="range-head" id="depot-head"></div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>Value</span><span><i style="background:var(--s2)"></i>Paid for what you hold</span></div>
+      <div class="chart" id="c-depot"></div>
+    </div>
+    <div class="card">
       <h2>Positions</h2>
       <p class="sub">Live prices from LS Exchange, the venue Trade Republic trades on. Today = against yesterday's close. Click a position for its analysis.</p>
       <div class="scroll"><table>
@@ -426,7 +439,14 @@ function renderToday() {
         <tfoot><tr><td>Total</td><td></td><td></td><td>${move(d.day, d.dayPct)}<span class="small">${signed(d.day)}</span></td><td>${eur(d.value)}</td><td>${eur(d.cost)}</td><td><span class="${dir(d.value - d.cost)}">${signed(d.value - d.cost)}</span></td><td></td></tr></tfoot>
       </table></div>
     </div>`;
+  el.insertAdjacentHTML('beforeend', `
+    <div class="card">
+      <div class="row"><div><h2>Allocation</h2><p class="sub" style="margin:0" id="alloc-note"></p></div>
+        <div class="seg" id="alloc-by"><button data-a="position">Position</button><button data-a="sector">Sector</button><button data-a="country">Country</button></div></div>
+      <div class="alloc" id="alloc"></div>
+    </div>`);
   el.querySelectorAll('tr[data-key]').forEach(tr => tr.onclick = () => openAnalysis(tr.dataset.key));
+  renderDepotChart(); renderAllocation();
 }
 
 // ------------------------------------------------------------ months
@@ -594,21 +614,22 @@ const CMP = { format: v => {                     // 637,2 bn - German decimals, 
 } };
 const big = (v, cur = 'EUR') => v == null ? '–' : `${CMP.format(v)} ${cur === 'USD' ? '$' : '€'}`;
 const money = (v, cur = 'EUR') => v == null ? '–' : `${nf(2, 2).format(v)} ${cur === 'USD' ? '$' : '€'}`;
-const A = { key: null, data: null, period: 'annual', metric: 'revenue' };
+const A = { key: null, data: null, period: 'annual', metric: 'revenue', hist: null, range: store.get('tro.prange', '1Y') };
 
 function closeAnalysis() { const el = $('#side'); el.classList.remove('on'); setTimeout(() => { el.hidden = true; }, 200); A.key = null; }
 addEventListener('keydown', e => { if (e.key === 'Escape' && A.key) closeAnalysis(); });
 
 async function openAnalysis(key) {
   const el = $('#side');
-  A.key = key; A.data = null;
+  A.key = key; A.data = null; A.hist = null;
   el.hidden = false; void el.offsetWidth; el.classList.add('on');      // reflow first, so it slides in
   el.innerHTML = `<button class="x" aria-label="Close">×</button><h2>${esc(displayName(key))}</h2><p class="muted">Loading analysis…</p>`;
   el.querySelector('.x').onclick = closeAnalysis;
   try {
-    const d = await api(`/api/analysis/${encodeURIComponent(key)}`);
+    const [d, h] = await Promise.all([api(`/api/analysis/${encodeURIComponent(key)}`),
+                                      api(`/api/history/${encodeURIComponent(key)}`).catch(() => null)]);
     if (A.key !== key) return;                      // another one was opened meanwhile
-    A.data = d;
+    A.data = d; A.hist = h;
     if (A.period === 'quarterly' && !d.us?.quarterly) A.period = 'annual';
     renderAnalysis();
   } catch (e) { if (A.key === key) el.innerHTML += `<p class="down">${esc(e.message)}</p>`; }
@@ -686,6 +707,12 @@ function renderAnalysis() {
     <div class="id">${[d.isin, pr?.sector, pr?.country].filter(Boolean).map(esc).join(' · ')}</div>
     ${last != null ? `<div class="px"><span class="v">${price(last)}</span>${dayPct != null ? move(dayPct, dayPct) : ''}</div>` : ''}
     ${range}
+    ${A.hist?.closes?.length ? `<div class="sec" style="margin-top:14px"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">Price</h3>${rangeSeg('p-range', ['1M', '6M', '1Y', '5Y'], A.range)}</div>
+      ${(() => { const t = S.data?.trades?.[d.key] || [];
+        const k = [t.some(x => x.type === 'BUY') && '<span><i style="background:var(--good);border-radius:50%"></i>Your buys</span>',
+                   t.some(x => x.type === 'SELL') && '<span><i style="background:var(--critical);border-radius:50%"></i>Your sells</span>'].filter(Boolean);
+        return k.length ? `<div class="keys" style="margin:0 0 6px">${k.join('')}</div>` : ''; })()}
+      <div class="chart" id="a-price"></div></div>` : ''}
     <div class="kv" style="margin-top:12px">
       ${pr?.marketCap ? `<span>Market value</span><span>${big(pr.marketCap, pr.marketCapCurrency)}</span>` : ''}
       ${pos ? `<span>You hold</span><span>${shares(pos.shares)} · ${eur(pos.value)}</span><span>Your gain</span><span class="${dir(pos.gain)}">${signed(pos.gain)} (${pct(pos.gainPct)})</span>` : ''}
@@ -695,6 +722,20 @@ function renderAnalysis() {
     <p class="note">Sources: onvista${us ? ', Nasdaq' : ''}. Not investment advice.</p>`;
   el.querySelector('.x').onclick = closeAnalysis;
   el.querySelectorAll('#a-period button').forEach(b => b.onclick = () => { A.period = b.dataset.p; renderAnalysis(); });
+  el.querySelectorAll('#p-range button').forEach(b => b.onclick = () => { A.range = b.dataset.r; store.set('tro.prange', A.range); renderAnalysis(); });
+  if ($('#a-price')) {
+    const today = S.data?.today ?? new Date().toISOString().slice(0, 10);
+    const RS = { '1M': 31, '6M': 183, '1Y': 366, '5Y': 5 * 366 };
+    const start = new Date(Date.parse(today) - RS[A.range] * 864e5).toISOString().slice(0, 10);
+    const pts = A.hist.closes.filter(([dt]) => dt >= start);
+    if (A.hist.live && pts.length && pts[pts.length - 1][0] < today) pts.push([today, A.hist.live.last]);
+    const idx = new Map(pts.map(([dt], i) => [dt, i]));
+    const near = dt => { if (idx.has(dt)) return idx.get(dt); const j = pts.findIndex(([x]) => x >= dt); return j < 0 ? pts.length - 1 : j; };
+    const markers = (S.data?.trades?.[d.key] || []).filter(t => t.date >= start)
+      .map(t => ({ i: near(t.date), kind: t.type === 'SELL' ? 'sell' : 'buy', text: `${shares(t.shares)} @ ${price(t.price)}` }));
+    timeChart($('#a-price'), { dates: pts.map(p => p[0]), series: [{ name: 'Price', color: '--s1', values: pts.map(p => p[1]) }],
+      markers, H: 180, fmtTick: v => nf(0, v < 10 ? 2 : 0).format(v), fmtVal: v => price(v) });
+  }
   el.querySelectorAll('#a-metric button').forEach(b => b.onclick = () => { A.metric = b.dataset.m; renderAnalysis(); });
   const host = $('#a-chart');
   if (host) {
@@ -730,6 +771,125 @@ function finChart(host, labels, values, cur, name) {
   host.querySelectorAll('rect[data-i]').forEach(r => {
     r.onpointermove = ev => showTip(ev, `<div class="t">${esc(labels[r.dataset.i])}</div>` + tipRow(name, big(values[r.dataset.i], cur)));
     r.onpointerleave = hideTip;
+  });
+}
+
+/**
+ * A line over days. Points are spaced by index (trading days), not calendar time.
+ * series: [{name, color, values}] · markers: [{i, kind: 'buy'|'sell', text}]
+ */
+function timeChart(host, { dates, series, markers = [], fmtTick, fmtVal, H = 220 }) {
+  const W = Math.max(300, host.clientWidth), m = { l: 58, r: series.length > 1 ? 86 : 70, t: 10, b: 26 };
+  const n = dates.length;
+  if (!n) { host.innerHTML = '<p class="muted">No prices for this range.</p>'; return; }
+  const vals = series.flatMap(s => s.values).filter(v => v != null);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi === lo) { hi += Math.abs(hi) * 0.05 || 1; lo -= Math.abs(lo) * 0.05 || 1; }
+  const step = niceStep((hi - lo) / 4);
+  const min = Math.floor(lo / step) * step, max = Math.ceil(hi / step) * step;
+  const x = i => m.l + (n === 1 ? (W - m.l - m.r) / 2 : (i * (W - m.l - m.r)) / (n - 1));
+  const y = v => m.t + (H - m.t - m.b) * ((max - v) / (max - min || 1));
+  let g = '';
+  for (let v = min; v <= max + step / 2; v += step) {
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
+    g += `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${esc(fmtTick(v))}</text>`;
+  }
+  const span = (Date.parse(dates[n - 1]) - Date.parse(dates[0])) / 864e5;
+  const fmtX = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', span <= 70 ? { day: 'numeric', month: 'short' } : { month: 'short', year: '2-digit' });
+  const ticks = Math.max(2, Math.min(6, Math.floor((W - m.l - m.r) / 80)));
+  for (let k = 0; k < ticks; k++) {
+    const i = Math.round((k * (n - 1)) / (ticks - 1));
+    g += `<text x="${x(i)}" y="${H - 6}" text-anchor="${k === 0 ? 'start' : k === ticks - 1 ? 'end' : 'middle'}">${esc(fmtX(dates[i]))}</text>`;
+  }
+  const ends = [];
+  for (const s of series) {
+    let d = '', pen = false;
+    s.values.forEach((v, i) => { if (v == null) { pen = false; return; } d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; });
+    g += `<path d="${d}" fill="none" stroke="var(${s.color})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const v = s.values[n - 1];
+    if (v != null) { g += `<circle cx="${x(n - 1)}" cy="${y(v)}" r="4" fill="var(${s.color})" stroke="var(--surface)" stroke-width="2"/>`; ends.push({ y: y(v), v }); }
+  }
+  const clear = ends.every((a, i) => ends.every((b, j) => i === j || Math.abs(a.y - b.y) > 15));
+  if (clear) ends.forEach(e => g += `<text class="end" x="${x(n - 1) + 9}" y="${e.y + 4}">${esc(fmtVal(e.v))}</text>`);
+  for (const mk of markers) {
+    const v = series[0].values[mk.i];
+    if (v == null) continue;
+    g += `<circle cx="${x(mk.i)}" cy="${y(v)}" r="5" fill="var(${mk.kind === 'sell' ? '--critical' : '--good'})" stroke="var(--surface)" stroke-width="2"/>`;
+  }
+  g += `<line class="cross" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" stroke="var(--axis)" stroke-width="1" visibility="hidden"/>`;
+  series.forEach((s, k) => g += `<circle class="hd" data-k="${k}" r="4" fill="var(${s.color})" stroke="var(--surface)" stroke-width="2" visibility="hidden"/>`);
+  g += `<rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent"/>`;
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map(s => s.name).join(' and '))} by day">${g}</svg>`;
+  const svg = host.querySelector('svg'), cross = svg.querySelector('.cross'), dots = svg.querySelectorAll('.hd');
+  const byI = new Map(); markers.forEach(mk => byI.set(mk.i, (byI.get(mk.i) || []).concat(mk)));
+  svg.onpointermove = ev => {
+    const r = svg.getBoundingClientRect(), px = ((ev.clientX - r.left) / r.width) * W;
+    const i = Math.max(0, Math.min(n - 1, Math.round(n === 1 ? 0 : ((px - m.l) / (W - m.l - m.r)) * (n - 1))));
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+    dots.forEach(d => { const v = series[d.dataset.k].values[i]; if (v == null) return d.setAttribute('visibility', 'hidden');
+      d.setAttribute('cx', x(i)); d.setAttribute('cy', y(v)); d.setAttribute('visibility', 'visible'); });
+    showTip(ev, `<div class="t">${esc(day(dates[i]))}</div>` + series.map(s => tipRow(s.name, fmtVal(s.values[i]), `var(${s.color})`)).join('')
+      + (byI.get(i) || []).map(mk => tipRow(mk.kind === 'sell' ? 'Sold' : 'Bought', esc(mk.text), `var(${mk.kind === 'sell' ? '--critical' : '--good'})`)).join(''));
+  };
+  svg.onpointerleave = () => { hideTip(); cross.setAttribute('visibility', 'hidden'); dots.forEach(d => d.setAttribute('visibility', 'hidden')); };
+}
+
+const RANGES = { '1W': 7, '1M': 31, 'YTD': 'ytd', '1Y': 366, '5Y': 5 * 366, 'All': null };
+const rangeStart = (key, today) => {
+  const r = RANGES[key];
+  if (r == null) return '0000';
+  if (r === 'ytd') return `${today.slice(0, 4)}-01-01`;
+  return new Date(Date.parse(today) - r * 864e5).toISOString().slice(0, 10);
+};
+const rangeSeg = (id, keys, cur) => `<div class="seg" id="${id}">${keys.map(k => `<button data-r="${k}" aria-pressed="${k === cur}">${k}</button>`).join('')}</div>`;
+
+// ------------------------------------------------------------ depot over time + allocation (Today)
+const D = { range: store.get('tro.drange', '1M'), alloc: store.get('tro.alloc', 'position') };
+
+function renderDepotChart() {
+  const d = S.data, host = $('#c-depot');
+  if (!host || !d.daily?.length) return;
+  const start = rangeStart(D.range, d.today);
+  let pts = d.daily.filter(p => p.d >= start);
+  if (pts.length < 2) pts = d.daily.slice(-2);
+  const result = p => p.value - p.cost + p.realised;
+  const a = pts[0], b = pts[pts.length - 1], change = result(b) - result(a);
+  $('#depot-head').innerHTML = `<span class="v ${dir(change)}">${signed(change)}</span>
+    <span class="${dir(change)}">${arrow(change)} ${pct(a.value ? change / a.value * 100 : null)}</span>
+    <span class="muted">${D.range === 'All' ? 'since the first buy' : `over ${D.range === 'YTD' ? 'this year' : D.range}`} · price moves only, buys and sells left out</span>`;
+  timeChart(host, {
+    dates: pts.map(p => p.d),
+    series: [{ name: 'Value', color: '--s1', values: pts.map(p => p.value) },
+             { name: 'Paid', color: '--s2', values: pts.map(p => p.cost) }],
+    fmtTick: v => N0.format(v / 100), fmtVal: v => eur(v),
+  });
+  document.querySelectorAll('#depot-range button').forEach(btn => btn.onclick = () => {
+    D.range = btn.dataset.r; store.set('tro.drange', D.range);
+    document.querySelectorAll('#depot-range button').forEach(x => x.setAttribute('aria-pressed', String(x === btn)));
+    renderDepotChart();
+  });
+}
+
+function renderAllocation() {
+  const d = S.data, host = $('#alloc');
+  if (!host) return;
+  const pos = d.positions.filter(p => p.value != null);
+  const total = pos.reduce((s, p) => s + p.value, 0) || 1;
+  const groups = new Map();
+  for (const p of pos) {
+    const k = D.alloc === 'position' ? p.name : (d.profiles?.[p.key]?.[D.alloc] ?? 'Unknown');
+    groups.set(k, (groups.get(k) || 0) + p.value);
+  }
+  const list = [...groups].sort((a, b) => b[1] - a[1]), top = list[0]?.[1] || 1;
+  host.innerHTML = list.map(([k, v]) => `<span class="lbl" title="${esc(k)}">${esc(k)}</span>
+    <span><span class="bar" style="display:block;width:${(v / top) * 100}%"></span></span>
+    <span class="num">${N0.format(v / total * 100)} %<small>${eur0(v)}</small></span>`).join('');
+  const biggest = list[0];
+  $('#alloc-note').textContent = biggest && biggest[1] / total > 0.4
+    ? `${biggest[0]} is ${N0.format(biggest[1] / total * 100)} % of your stocks + crypto.` : '';
+  document.querySelectorAll('#alloc-by button').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.a === D.alloc));
+    btn.onclick = () => { D.alloc = btn.dataset.a; store.set('tro.alloc', D.alloc); renderAllocation(); };
   });
 }
 
@@ -861,7 +1021,7 @@ async function loadSummary() {
   } catch (e) { $('#meta').innerHTML = `<span class="down">${esc(e.message)}</span>`; }
 }
 let resizeT;
-addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderMonths, 150); });
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { renderMonths(); if (S.data && !S.data.empty) renderDepotChart(); }, 150); });
 setInterval(() => { if (document.visibilityState === 'visible') loadSummary(); }, 5 * 60 * 1000);
 addEventListener('hashchange', () => showTab(location.hash.slice(1)));
 showTab(location.hash.slice(1));

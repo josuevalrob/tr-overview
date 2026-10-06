@@ -18,15 +18,16 @@
  *   POST   /api/watchlist    {query}                    follow a name or an ISIN
  *   DELETE /api/watchlist/<key>
  *   GET    /api/analysis/<key>                         financials, analysts, events, dividends
+ *   GET    /api/history/<key>?from=YYYY-MM-DD          daily closes (EUR) for the price chart
  */
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadAll, mergeExports, parseExport, isTrExport, replay, holdings, positionsNow, months,
-         taxYear, taxSettings, years } from './lib/portfolio.mjs';
+         taxYear, taxSettings, years, trades, daily } from './lib/portfolio.mjs';
 import { quote, closes, search, pool } from './lib/market.mjs';
 import { headlines } from './lib/news.mjs';
-import { analysis } from './lib/analysis.mjs';
+import { analysis, profile } from './lib/analysis.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const PUB  = path.join(HERE, 'public');
@@ -76,6 +77,10 @@ async function summary(settings, merged = loadAll(DATA)) {
     catch (e) { series[k] = []; errors.push(`${st.meta.get(k)?.name ?? k}: price history unavailable (${e.message})`); }
   });
   const pos = positionsNow(st, quotes);
+  const profiles = {};
+  await pool(pos.positions.map(p => p.key), 4, async k => {
+    try { profiles[k] = await profile(k); } catch { profiles[k] = { sector: 'Unknown', country: 'Unknown' }; }
+  });
   const tax = taxSettings(settings);
   const cur = Number(today.slice(0, 4));
   const ys = years(rows);
@@ -84,6 +89,9 @@ async function summary(settings, merged = loadAll(DATA)) {
     today, asOf: last, first, files, rowCount: rows.length, cash: st.cash, paidIn: st.paidIn, settings: tax,
     ...pos,
     months: months(rows, series, quotes, today),
+    daily: daily(rows, series, quotes, today),
+    trades: trades(rows),
+    profiles,
     tax: Object.fromEntries(ys.map(y => [y, taxYear(rows, y, y === cur ? pos : null, today, tax)])),
     errors: errors.concat(pos.missing.map(n => `${n}: no live price`)),
   };
@@ -148,6 +156,15 @@ async function api(req, url) {
     return [200, await news(body.lang === 'de' ? 'de' : body.lang ? 'en' : lang, body.subjects)];
   }
   if (req.method === 'GET' && part[0] === 'analysis' && part[1]) return [200, await analysis(decodeURIComponent(part[1]))];
+  if (req.method === 'GET' && part[0] === 'history' && part[1]) {
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('from') || '') ? url.searchParams.get('from')
+               : new Date(Date.now() - 5 * 365 * 864e5).toISOString().slice(0, 10);
+    const key = decodeURIComponent(part[1]);
+    const series = (await closes(key, from)).filter(([d]) => d >= from);
+    let live = null;
+    try { live = await quote(key); } catch { /* history alone is fine */ }
+    return [200, { key, from, closes: series, live }];
+  }
   if (part[0] === 'watchlist') {
     if (req.method === 'GET') {
       const list = readWatch(), q = await quotesFor(list.map(w => w.key));

@@ -5,11 +5,11 @@ your own machine, keep your data there. No account login, no database, no depend
 
 | Tab | |
 |---|---|
-| **Today** | every open position at the live LS Exchange price: today's move, value, paid, gain, weight |
+| **Today** | every open position at the live LS Exchange price: today's move, value, paid, gain, weight; stocks + crypto over time (1W–All); allocation by position, sector, country |
 | **Months** | what the account earned so far, stocks value vs cost, what each month earned, a month-by-month table |
 | **Taxes** | the Sparer-Pauschbetrag used per year, an estimate to 31 Dec, "if you sold everything today", stock sales (FIFO), crypto holding periods |
 | **News** | Google News headlines (English / German) for every holding, plus any stock you choose to follow |
-| **Analysis** (click a position) | sidebar: 52-week range, financials (annual since ~2016 + EPS/dividend estimates; quarterly for US shares), analysts' buy/hold/sell and price targets, next earnings date, dividends |
+| **Analysis** (click a position) | sidebar: price chart (1M–5Y) with your buys and sells marked, 52-week range, financials (annual since ~2016 + EPS/dividend estimates; quarterly for US shares), analysts' buy/hold/sell and price targets, next earnings date, dividends |
 
 ## Run it
 
