@@ -436,8 +436,7 @@ function renderToday() {
       </div>
       ${d.intraday !== null ? `<div class="card">
         <div class="row" style="margin-bottom:4px"><h2>Today</h2></div>
-        <div class="range-head"><span class="v">${eur(d.value)}</span><span class="${dir(d.day)}">${arrow(d.day)} ${pct(d.dayPct)}</span>
-          <span class="muted">${signed(d.day)} vs yesterday's close</span></div>
+        <div class="range-head" id="intraday-head"></div>
         <div class="legend"><span><i style="background:var(--s1)"></i>Value today</span><span><i style="background:repeating-linear-gradient(90deg,var(--ink2) 0 2px,transparent 2px 5px)"></i>Yesterday's close</span></div>
         <div class="chart" id="c-intraday"></div>
       </div>` : ''}
@@ -891,6 +890,9 @@ function renderIntraday() {
   if (!host) return;
   const day = d.intraday?.date === d.today ? d.intraday : null;
   const pts = day?.points ?? [], base = day?.prevClose ?? (d.value - d.day);
+  const now = pts.at(-1)?.[1] ?? d.value, chg = now - base;
+  $('#intraday-head').innerHTML = `<span class="v">${eur(now)}</span><span class="${dir(chg)}">${arrow(chg)} ${pct(base ? chg / base * 100 : null)}</span>
+    <span class="muted">${signed(chg)} vs yesterday's close · live</span>`;
   const W = Math.max(300, host.clientWidth), H = 220, m = { l: 58, r: 16, t: 10, b: 26 };
   const t0 = Math.min(450, pts[0]?.[0] ?? 450), t1 = Math.max(1380, pts.at(-1)?.[0] ?? 1380);   // LS Exchange 07:30-23:00
   const vals = pts.map(p => p[1]).concat(base);
@@ -917,8 +919,8 @@ function renderIntraday() {
         <circle class="hd" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2" visibility="hidden"/>
         <rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent"/>`;
   host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Depot value today">${g}</svg>`
-    + (pts.length < 2 ? `<p class="note">The line fills in while tr-overview runs: one point every 5 minutes.</p>`
-                      : `<p class="note">Recorded from ${hhmm(pts[0][0])} while tr-overview was running.</p>`);
+    + (pts.length < 2 ? `<p class="note">The line grows every minute while this page is open.</p>`
+                      : `<p class="note">Recorded from ${hhmm(pts[0][0])} · every minute while this page is open, every 5 minutes otherwise.</p>`);
   const svg = host.querySelector('svg'), cross = svg.querySelector('.cross'), dot = svg.querySelector('.hd');
   svg.onpointermove = ev => {
     if (!pts.length) return;
@@ -1085,6 +1087,11 @@ async function loadSummary() {
 let resizeT;
 addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { renderMonths(); if (S.data && !S.data.empty) { renderDepotChart(); renderIntraday(); } }, 150); });
 setInterval(() => { if (document.visibilityState === 'visible') loadSummary(); }, 5 * 60 * 1000);
+// live: the Today card gets a fresh point every minute while it is on screen
+setInterval(async () => {
+  if (document.visibilityState !== 'visible' || S.preview || !S.data || S.data.empty || !$('#c-intraday') || !$('#tab-today').classList.contains('on')) return;
+  try { S.data.intraday = await api('/api/intraday'); renderIntraday(); } catch { /* next minute */ }
+}, 60 * 1000);
 addEventListener('hashchange', () => showTab(location.hash.slice(1)));
 showTab(location.hash.slice(1));
 loadSummary();

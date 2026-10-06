@@ -40,8 +40,9 @@ The monthly *Account statement* is a PDF with net amounts only (no fee, no tax) 
   transactions can never end up in a commit.
 - The server listens on `127.0.0.1` only. What leaves your machine: price requests to onvista (by
   ISIN) and news searches to Google News (by company name). Never your transactions.
-- `data/intraday.json`: today's depot value, recorded every 5 minutes while the server runs (onvista does
-  not serve intraday charts to scripts). Started fresh each day; the line covers only the hours it ran.
+- `data/intraday.json`: today's depot value, recorded every minute while the page is open and every 5
+  minutes otherwise (onvista does not serve intraday charts to scripts). Started fresh each day; the line
+  covers only the hours the server ran.
 - The browser only remembers view settings (tab, language, tax options).
 
 ## Data sources

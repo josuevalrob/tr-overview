@@ -17,6 +17,7 @@
  *   GET    /api/watchlist                               followed stocks with today's move
  *   POST   /api/watchlist    {query}                    follow a name or an ISIN
  *   DELETE /api/watchlist/<key>
+ *   GET    /api/intraday                               today's recorded line (records a fresh point)
  *   GET    /api/analysis/<key>                         financials, analysts, events, dividends
  *   GET    /api/history/<key>?from=YYYY-MM-DD          daily closes (EUR) for the price chart
  */
@@ -56,18 +57,18 @@ const readJson = req => new Promise((resolve, reject) => {
   req.on('error', reject);
 });
 
-async function quotesFor(keys) {
+async function quotesFor(keys, maxAge) {
   const out = {};
   await pool(keys, 4, async k => {
-    try { out[k] = await quote(k); } catch (e) { out[k] = { error: e.message }; }
+    try { out[k] = await quote(k, maxAge); } catch (e) { out[k] = { error: e.message }; }
   });
   return out;
 }
 
 // ---------------------------------------------------------------- intraday
 // onvista does not serve intraday charts to scripts (403, terms of use), so the day's line
-// is recorded here: the depot value every few minutes while tr-overview runs. One file,
-// started fresh each day. Only for your own data in data/, never for the sample.
+// is recorded here: every minute while the page is open (it polls /api/intraday), every
+// 5 minutes otherwise. One file, started fresh each day. Your own data only, never the sample.
 const berlinMinute = () => {
   const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', hour12: false })
     .format(new Date()).split(':').map(Number);
@@ -76,10 +77,10 @@ const berlinMinute = () => {
 const readIntraday = () => { try { return JSON.parse(fs.readFileSync(INTRADAY, 'utf8')); } catch { return null; } };
 
 /** Value and previous close of what is held now, from live quotes. */
-async function depotNow(rows) {
+async function depotNow(rows, maxAge) {
   const hs = holdings(replay(rows));
   if (!hs.length) return null;
-  const q = await quotesFor(hs.map(h => h.key));
+  const q = await quotesFor(hs.map(h => h.key), maxAge);
   let value = 0, prev = 0;
   for (const h of hs) {
     if (!q[h.key] || q[h.key].error) return null;      // a hole would draw a fake drop
@@ -89,16 +90,16 @@ async function depotNow(rows) {
   return { value: Math.round(value * 100), prev: Math.round(prev * 100) };
 }
 
-async function sampleIntraday() {
+async function sampleIntraday(maxAge) {
   try {
-    const now = await depotNow(loadAll(DATA).rows);
+    const now = await depotNow(loadAll(DATA).rows, maxAge);
     if (!now) return;
     const date = berlinToday(), m = berlinMinute();
     let day = readIntraday();
     if (day?.date !== date) day = { date, points: [] };
     day.prevClose = now.prev;
     const last = day.points.at(-1);
-    if (last && m - last[0] < 4) last[1] = now.value;   // same few minutes: update, don't add
+    if (last && m - last[0] < 1) last[1] = now.value;   // same minute: update, don't add
     else day.points.push([m, now.value]);
     fs.mkdirSync(DATA, { recursive: true });
     fs.writeFileSync(INTRADAY, JSON.stringify(day));
@@ -184,6 +185,7 @@ async function api(req, url) {
   const settings = { joint: url.searchParams.get('joint') === '1', church: Number(url.searchParams.get('church') || 0) };
   const lang = url.searchParams.get('lang') === 'de' ? 'de' : 'en';
   if (req.method === 'GET' && part[0] === 'summary') return [200, await summary(settings)];
+  if (req.method === 'GET' && part[0] === 'intraday') { await sampleIntraday(55 * 1000); return [200, readIntraday() ?? {}]; }
   if (req.method === 'POST' && part[0] === 'upload') {
     const { files = [] } = await readJson(req);
     return [200, { files: upload(files.map(f => ({ name: String(f.name || 'export.csv'), text: String(f.text || '') }))) }];
