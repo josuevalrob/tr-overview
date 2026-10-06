@@ -33,6 +33,7 @@ const HERE = path.dirname(new URL(import.meta.url).pathname);
 const PUB  = path.join(HERE, 'public');
 const DATA = path.resolve(process.env.DATA_DIR || path.join(HERE, 'data'));
 const WATCH = path.join(DATA, 'watchlist.json');
+const INTRADAY = path.join(DATA, 'intraday.json');
 const PORT = Number(process.env.PORT || 3000);
 const MAX_BODY = 20 * 1024 * 1024;
 
@@ -61,6 +62,47 @@ async function quotesFor(keys) {
     try { out[k] = await quote(k); } catch (e) { out[k] = { error: e.message }; }
   });
   return out;
+}
+
+// ---------------------------------------------------------------- intraday
+// onvista does not serve intraday charts to scripts (403, terms of use), so the day's line
+// is recorded here: the depot value every few minutes while tr-overview runs. One file,
+// started fresh each day. Only for your own data in data/, never for the sample.
+const berlinMinute = () => {
+  const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', hour12: false })
+    .format(new Date()).split(':').map(Number);
+  return h * 60 + m;
+};
+const readIntraday = () => { try { return JSON.parse(fs.readFileSync(INTRADAY, 'utf8')); } catch { return null; } };
+
+/** Value and previous close of what is held now, from live quotes. */
+async function depotNow(rows) {
+  const hs = holdings(replay(rows));
+  if (!hs.length) return null;
+  const q = await quotesFor(hs.map(h => h.key));
+  let value = 0, prev = 0;
+  for (const h of hs) {
+    if (!q[h.key] || q[h.key].error) return null;      // a hole would draw a fake drop
+    value += h.shares * q[h.key].last;
+    prev += h.shares * (q[h.key].prev ?? q[h.key].last);
+  }
+  return { value: Math.round(value * 100), prev: Math.round(prev * 100) };
+}
+
+async function sampleIntraday() {
+  try {
+    const now = await depotNow(loadAll(DATA).rows);
+    if (!now) return;
+    const date = berlinToday(), m = berlinMinute();
+    let day = readIntraday();
+    if (day?.date !== date) day = { date, points: [] };
+    day.prevClose = now.prev;
+    const last = day.points.at(-1);
+    if (last && m - last[0] < 4) last[1] = now.value;   // same few minutes: update, don't add
+    else day.points.push([m, now.value]);
+    fs.mkdirSync(DATA, { recursive: true });
+    fs.writeFileSync(INTRADAY, JSON.stringify(day));
+  } catch { /* a missed sample is just a missing point */ }
 }
 
 async function summary(settings, merged = loadAll(DATA)) {
@@ -93,6 +135,7 @@ async function summary(settings, merged = loadAll(DATA)) {
     trades: trades(rows),
     profiles,
     tax: Object.fromEntries(ys.map(y => [y, taxYear(rows, y, y === cur ? pos : null, today, tax)])),
+    intraday: merged.files?.includes?.('preview.csv') ? null : (await sampleIntraday(), readIntraday()),
     errors: errors.concat(pos.missing.map(n => `${n}: no live price`)),
   };
 }
@@ -216,3 +259,5 @@ const server = http.createServer(async (req, res) => {
 
 // localhost only: this serves your portfolio, it is not meant for the network
 server.listen(PORT, '127.0.0.1', () => console.log(`tr-overview  http://localhost:${PORT}   data: ${DATA}`));
+sampleIntraday();
+setInterval(sampleIntraday, 5 * 60 * 1000);

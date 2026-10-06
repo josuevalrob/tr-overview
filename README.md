@@ -5,7 +5,7 @@ your own machine, keep your data there. No account login, no database, no depend
 
 | Tab | |
 |---|---|
-| **Today** | every open position at the live LS Exchange price: today's move, value, paid, gain, weight; stocks + crypto over time (1W–All); allocation by position, sector, country |
+| **Today** | every open position at the live LS Exchange price: today's move, value, paid, gain, weight; stocks + crypto over time (1W–All) beside today's line against yesterday's close; allocation by position, sector, country |
 | **Months** | what the account earned so far, stocks value vs cost, what each month earned, a month-by-month table |
 | **Taxes** | the Sparer-Pauschbetrag used per year, an estimate to 31 Dec, "if you sold everything today", stock sales (FIFO), crypto holding periods |
 | **News** | Google News headlines (English / German) for every holding, plus any stock you choose to follow |
@@ -40,6 +40,8 @@ The monthly *Account statement* is a PDF with net amounts only (no fee, no tax) 
   transactions can never end up in a commit.
 - The server listens on `127.0.0.1` only. What leaves your machine: price requests to onvista (by
   ISIN) and news searches to Google News (by company name). Never your transactions.
+- `data/intraday.json`: today's depot value, recorded every 5 minutes while the server runs (onvista does
+  not serve intraday charts to scripts). Started fresh each day; the line covers only the hours it ran.
 - The browser only remembers view settings (tab, language, tax options).
 
 ## Data sources
