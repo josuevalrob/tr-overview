@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Depot Overview</title>
+<meta name="description" content="Trade Republic depot overview from the transaction export: today, months, taxes, news.">
+<style>
+  :root{
+    color-scheme:light;
+    --page:#f9f9f7; --surface:#fcfcfb; --raised:#ffffff; --line:rgba(11,11,11,.10);
+    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7;
+    --s1:#2a78d6; --s2:#eb6834; --pos:#2a78d6; --neg:#e34948;
+    --up:#006300; --down:#d03b3b; --critical:#d03b3b; --good:#0ca30c;
+    --track:#cde2fb; --proj:#86b6ef; --wash:rgba(42,120,214,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --page:#0d0d0d; --surface:#1a1a19; --raised:#222220; --line:rgba(255,255,255,.10);
+      --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+      --s1:#3987e5; --s2:#d95926; --pos:#3987e5; --neg:#e66767;
+      --up:#0ca30c; --down:#e66767; --critical:#d03b3b; --good:#0ca30c;
+      --track:#0d366b; --proj:#1c5cab; --wash:rgba(57,135,229,.12);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --page:#0d0d0d; --surface:#1a1a19; --raised:#222220; --line:rgba(255,255,255,.10);
+    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+    --s1:#3987e5; --s2:#d95926; --pos:#3987e5; --neg:#e66767;
+    --up:#0ca30c; --down:#e66767; --critical:#d03b3b; --good:#0ca30c;
+    --track:#0d366b; --proj:#1c5cab; --wash:rgba(57,135,229,.12);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+       font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  a{color:inherit}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 16px}
+  header{padding:22px 0 0}
+  .top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  h1{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em;flex:1}
+  .meta{margin:4px 0 0;color:var(--ink2);font-size:12.5px}
+  .btn{font:inherit;font-size:13px;color:var(--ink);background:var(--raised);border:1px solid var(--line);
+       border-radius:8px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+  .btn:hover{border-color:var(--axis)}
+  .btn.primary{background:var(--s1);border-color:var(--s1);color:#fff}
+  .back{font-size:13px;color:var(--ink2);text-decoration:none}
+  .back:hover{color:var(--ink)}
+  nav.tabs{display:flex;gap:4px;margin:16px 0 0;border-bottom:1px solid var(--line);overflow-x:auto}
+  nav.tabs button{font:inherit;font-size:14px;background:none;border:0;border-bottom:2px solid transparent;
+       color:var(--ink2);padding:8px 12px;cursor:pointer;white-space:nowrap}
+  nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--s1);font-weight:600}
+  main{padding:18px 0 60px}
+  section.tab{display:none}
+  section.tab.on{display:block}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .card h2{margin:0 0 2px;font-size:14px;font-weight:600}
+  .card .sub{margin:0 0 12px;color:var(--ink2);font-size:12.5px}
+  .banner{border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;
+          background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--critical)}
+  .banner b{font-weight:600}
+  .hero{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 28px}
+  .hero .k{font-size:12.5px;color:var(--ink2)}
+  .hero .v{font-size:48px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+  .hero .d{font-size:16px;font-weight:600}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:16px}
+  .tile{background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .tile .k{font-size:12px;color:var(--ink2)}
+  .tile .v{font-size:20px;font-weight:600;margin-top:2px}
+  .tile .s{font-size:12px;color:var(--muted)}
+  .up{color:var(--up)} .down{color:var(--down)}
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-weight:500;color:var(--ink2);text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:12px}
+  td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  th:first-child,td:first-child{text-align:left}
+  tr:last-child td{border-bottom:0}
+  td .small{display:block;font-size:11.5px;color:var(--muted)}
+  tfoot td{font-weight:600;border-top:1px solid var(--axis)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{font:inherit;font-size:13px;background:var(--raised);color:var(--ink2);border:0;padding:5px 12px;cursor:pointer}
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button[aria-pressed="true"]{background:var(--s1);color:#fff}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin-bottom:6px}
+  .legend i{display:inline-block;width:14px;height:2px;border-radius:1px;vertical-align:middle;margin-right:6px}
+  .chart{position:relative;width:100%}
+  .chart svg{display:block;width:100%;height:auto;overflow:visible}
+  .chart text{font:11px system-ui,-apple-system,"Segoe UI",sans-serif;fill:var(--muted);font-variant-numeric:tabular-nums}
+  .chart text.end{fill:var(--ink2);font-weight:600}
+  #tip{position:fixed;pointer-events:none;z-index:10;background:var(--raised);color:var(--ink);border:1px solid var(--line);
+       border-radius:8px;padding:8px 10px;font-size:12.5px;box-shadow:0 6px 24px rgba(0,0,0,.18);display:none;min-width:150px}
+  #tip .t{font-weight:600;margin-bottom:3px}
+  #tip .r{display:flex;justify-content:space-between;gap:14px;font-variant-numeric:tabular-nums}
+  #tip .r span:first-child{color:var(--ink2)}
+  #tip .r i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+  .meter{position:relative;height:14px;border-radius:7px;background:var(--track);overflow:hidden;margin:14px 0 6px}
+  .meter span{position:absolute;top:0;bottom:0}
+  .meter .used{left:0;background:var(--s1)}
+  .meter .proj{background:var(--proj);
+       background-image:repeating-linear-gradient(45deg,transparent 0 4px,rgba(255,255,255,.35) 4px 6px)}
+  .meter .over{background:var(--critical)}
+  .meter-scale{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)}
+  .keys{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin-top:8px}
+  .keys i{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:6px}
+  .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:14px}
+  .fact{background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .fact .k{font-size:12px;color:var(--ink2)}
+  .fact .v{font-size:18px;font-weight:600;margin-top:2px}
+  .fact .s{font-size:12px;color:var(--muted);margin-top:2px}
+  .status{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13px}
+  .status .dot{width:10px;height:10px;border-radius:50%}
+  .note{font-size:12px;color:var(--muted);margin:10px 0 0}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .chip{font:inherit;font-size:12.5px;display:inline-flex;align-items:center;gap:6px;background:var(--raised);
+        color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:4px 10px;cursor:pointer}
+  .chip[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+  .chip .pct{font-size:11.5px;font-variant-numeric:tabular-nums}
+  .chip .x{color:var(--muted);padding-left:2px}
+  .chip .x:hover{color:var(--critical)}
+  .chip.watch{border-style:dashed}
+  form.add{display:flex;gap:6px;flex-wrap:wrap}
+  form.add input{font:inherit;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);
+                 background:var(--raised);color:var(--ink);min-width:220px;flex:1}
+  .news{list-style:none;margin:0;padding:0}
+  .news li{padding:10px 0;border-bottom:1px solid var(--line)}
+  .news li:last-child{border-bottom:0}
+  .news a{text-decoration:none;font-weight:500;line-height:1.35}
+  .news a:hover{text-decoration:underline}
+  .news .m{font-size:12px;color:var(--muted);margin-top:2px}
+  .news .tag{color:var(--ink2)}
+  .muted{color:var(--muted)}
+  #drop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:20;
+        background:rgba(13,13,13,.55);color:#fff;font-size:18px;font-weight:600}
+  #drop.on{display:flex}
+  #drop div{border:2px dashed #fff;border-radius:16px;padding:40px 48px}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--raised);color:var(--ink);
+         border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px;z-index:30;
+         box-shadow:0 6px 24px rgba(0,0,0,.2);display:none;max-width:calc(100vw - 32px)}
+  .steps{margin:4px 0 12px;padding-left:20px;color:var(--ink2)}
+  .steps li{margin:4px 0}
+  .steps b{color:var(--ink)}
+  body.empty nav.tabs, body.empty section.tab{display:none !important}
+  .settings{display:flex;gap:10px 18px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink2);margin-top:12px}
+  @media (max-width:600px){ .hero .v{font-size:40px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="top">
+      <h1>Depot overview</h1>
+      <button class="btn" id="forget" type="button" hidden>Forget my data</button>
+      <label class="btn primary" for="file">Upload export</label>
+      <input id="file" type="file" accept=".csv,text/csv" multiple hidden>
+    </div>
+    <p class="meta" id="meta">Trade Republic transaction export → today, months, taxes, news.</p>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="today">Today</button>
+      <button role="tab" data-tab="months">Months</button>
+      <button role="tab" data-tab="taxes">Taxes</button>
+      <button role="tab" data-tab="news">News</button>
+    </nav>
+  </header>
+  <main>
+    <div id="banners"></div>
+    <section class="card" id="empty" hidden>
+      <h2>Your Trade Republic depot at a glance</h2>
+      <p class="sub">Today's move per position, month by month, your tax-free allowance, and news for what you hold.</p>
+      <ol class="steps">
+        <li>In Trade Republic open <b>Statements → Transaction export</b> and export the CSV. All time is best.</li>
+        <li>Drop the file anywhere on this page, or use <b>Upload export</b>.</li>
+        <li>Upload a fresh export whenever you like. Rows you already have are skipped.</li>
+      </ol>
+      <p class="sub">The file stays in this browser. The server uses it only to calculate and keeps nothing. Prices: onvista (LS Exchange). News: Google News.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label class="btn primary" for="file">Upload export</label>
+        <button class="btn" id="sample" type="button">Try with sample data</button>
+      </div>
+    </section>
+    <section class="tab" id="tab-today"></section>
+    <section class="tab" id="tab-months"></section>
+    <section class="tab" id="tab-taxes"></section>
+    <section class="tab" id="tab-news">
+      <div class="card">
+        <div class="row">
+          <form class="add" id="add">
+            <input id="addq" placeholder="Follow another stock: name or ISIN" autocomplete="off">
+            <button class="btn" type="submit">Follow</button>
+          </form>
+          <div class="seg" id="lang">
+            <button data-lang="en">English</button><button data-lang="de">Deutsch</button>
+          </div>
+        </div>
+        <div class="chips" id="chips"></div>
+        <ul class="news" id="newslist"><li class="muted">Loading headlines…</li></ul>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="tip"></div>
+<div id="drop"><div>Drop the Trade Republic transaction export</div></div>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const load = (k, d) => { try { return JSON.parse(store.get(k, '')) ?? d; } catch { return d; } };
+// Everything the user gives us lives here, in this browser - the server keeps nothing.
+const S = { data: null, mode: store.get('tro.mode', 'all'), year: null, lang: store.get('tro.lang', 'en'),
+            filter: 'all', news: null,
+            files: load('tro.files', []), watch: load('tro.watch', []), settings: load('tro.settings', { joint: false, church: 0 }) };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
+
+// ------------------------------------------------------------ formatting (cents in, German out)
+const nf = (min, max) => new Intl.NumberFormat('de-DE', { minimumFractionDigits: min, maximumFractionDigits: max });
+const N2 = nf(2, 2), N0 = nf(0, 0);
+const eur = c => c == null ? '–' : `${N2.format(c / 100)} €`;
+const eur0 = c => c == null ? '–' : `${N0.format(c / 100)} €`;
+const signed = c => c == null ? '–' : `${c > 0 ? '+' : c < 0 ? '−' : ''}${N2.format(Math.abs(c) / 100)} €`;
+const pct = p => p == null ? '–' : `${p > 0 ? '+' : p < 0 ? '−' : ''}${N2.format(Math.abs(p))} %`;
+const price = v => `${nf(2, v < 10 ? 4 : 2).format(v)} €`;
+const shares = v => nf(0, v < 1 ? 6 : 4).format(v);
+const dir = v => v > 0 ? 'up' : v < 0 ? 'down' : '';
+const arrow = v => v > 0 ? '▲' : v < 0 ? '▼' : '';
+const move = (c, p) => `<span class="${dir(c ?? p)}">${arrow(c ?? p)} ${pct(p)}</span>`;
+const day = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const mon = m => new Date(m + '-15T12:00:00Z').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+const monLong = m => new Date(m + '-15T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+const time = iso => iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }) : '';
+const ago = iso => {
+  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (m < 60) return `${Math.max(1, m)} min ago`;
+  if (m < 60 * 24) return `${Math.round(m / 60)} h ago`;
+  return `${Math.round(m / 1440)} d ago`;
+};
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  return j;
+}
+function toast(html, ms = 6000) {
+  const t = $('#toast'); t.innerHTML = html; t.style.display = 'block';
+  clearTimeout(toast.h); toast.h = setTimeout(() => (t.style.display = 'none'), ms);
+}
+
+// ------------------------------------------------------------ tabs
+function showTab(name) {
+  if (!['today', 'months', 'taxes', 'news'].includes(name)) name = 'today';
+  document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('on', s.id === `tab-${name}`));
+  if (history.replaceState) history.replaceState(null, '', `#${name}`);
+  if (name === 'months') renderMonths();               // charts need a measured width
+  if (name === 'news' && !S.news) loadNews();
+}
+document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// ------------------------------------------------------------ tooltip
+const tip = $('#tip');
+function showTip(ev, html) {
+  tip.innerHTML = html; tip.style.display = 'block';
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = ev.clientX + 14, y = ev.clientY + 14;
+  if (x + w > innerWidth - 8) x = ev.clientX - w - 14;
+  if (y + h > innerHeight - 8) y = ev.clientY - h - 14;
+  tip.style.left = `${Math.max(8, x)}px`; tip.style.top = `${Math.max(8, y)}px`;
+}
+const hideTip = () => (tip.style.display = 'none');
+const tipRow = (label, value, color) =>
+  `<div class="r"><span>${color ? `<i style="background:${color}"></i>` : ''}${esc(label)}</span><span>${value}</span></div>`;
+
+// ------------------------------------------------------------ charts
+const NS = 'http://www.w3.org/2000/svg';
+const niceStep = raw => {
+  const p = 10 ** Math.floor(Math.log10(raw || 1)), f = raw / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+};
+const yTick = v => N0.format(v / 100);
+// every Nth month, plus the last one - unless it would sit on top of its neighbour
+const showLabel = (i, n, every) => i === n - 1 || (i % every === 0 && n - 1 - i >= every);
+
+function lineChart(host, { labels, series, tipTitle }) {
+  const W = Math.max(320, host.clientWidth), H = 260, m = { l: 58, r: 92, t: 10, b: 26 };
+  const vals = series.flatMap(s => s.values).filter(v => v != null);
+  const hi = Math.max(...vals, 1), lo = Math.min(0, ...vals);
+  const step = niceStep((hi - lo) / 4);
+  const max = Math.ceil(hi / step) * step, min = Math.floor(lo / step) * step;
+  const n = labels.length;
+  const x = i => m.l + (n === 1 ? (W - m.l - m.r) / 2 : (i * (W - m.l - m.r)) / (n - 1));
+  const y = v => m.t + (H - m.t - m.b) * ((max - v) / (max - min || 1));
+  let g = '';
+  for (let v = min; v <= max + 1; v += step) {
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(${v === 0 ? '--axis' : '--grid'})" stroke-width="1"/>`;
+    g += `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${yTick(v)}</text>`;
+  }
+  const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((W - m.l - m.r) / 64))));
+  labels.forEach((l, i) => {
+    if (showLabel(i, n, every)) g += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${esc(mon(l))}</text>`;
+  });
+  const ends = [];
+  for (const s of series) {
+    const d = s.values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+    g += `<path d="${d}" fill="none" stroke="var(${s.color})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const v = s.values[n - 1];
+    g += `<circle cx="${x(n - 1)}" cy="${y(v)}" r="4" fill="var(${s.color})" stroke="var(--surface)" stroke-width="2"/>`;
+    ends.push({ y: y(v), v });
+  }
+  // direct end labels only when they do not collide - otherwise the legend and tooltip carry it
+  const clear = ends.every((a, i) => ends.every((b, j) => i === j || Math.abs(a.y - b.y) > 15));
+  if (clear) ends.forEach(e => g += `<text class="end" x="${x(n - 1) + 9}" y="${e.y + 4}">${eur0(e.v)}</text>`);
+  g += `<line class="cross" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" stroke="var(--axis)" stroke-width="1" visibility="hidden"/>`;
+  series.forEach((s, k) => g += `<circle class="hd" data-k="${k}" r="4" fill="var(${s.color})" stroke="var(--surface)" stroke-width="2" visibility="hidden"/>`);
+  g += `<rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent"/>`;
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map(s => s.name).join(' and '))} by month">${g}</svg>`;
+  const svg = host.querySelector('svg'), cross = svg.querySelector('.cross'), dots = svg.querySelectorAll('.hd');
+  svg.onpointermove = ev => {
+    const r = svg.getBoundingClientRect(), px = ((ev.clientX - r.left) / r.width) * W;
+    const i = Math.max(0, Math.min(n - 1, Math.round(n === 1 ? 0 : ((px - m.l) / (W - m.l - m.r)) * (n - 1))));
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+    dots.forEach(d => { const s = series[d.dataset.k]; d.setAttribute('cx', x(i)); d.setAttribute('cy', y(s.values[i])); d.setAttribute('visibility', 'visible'); });
+    showTip(ev, `<div class="t">${esc(tipTitle(i))}</div>` + series.map(s => tipRow(s.name, eur(s.values[i]), `var(${s.color})`)).join(''));
+  };
+  svg.onpointerleave = () => { hideTip(); cross.setAttribute('visibility', 'hidden'); dots.forEach(d => d.setAttribute('visibility', 'hidden')); };
+}
+
+function barChart(host, { labels, values, tipHtml }) {
+  const W = Math.max(320, host.clientWidth), H = 200, m = { l: 58, r: 16, t: 10, b: 26 };
+  const hi = Math.max(0, ...values), lo = Math.min(0, ...values);
+  const step = niceStep((hi - lo || 100) / 4);
+  const max = Math.ceil(hi / step) * step, min = Math.floor(lo / step) * step;
+  const y = v => m.t + (H - m.t - m.b) * ((max - v) / (max - min || 1));
+  const n = values.length, band = (W - m.l - m.r) / n, bw = Math.min(24, band * 0.62);
+  let g = '';
+  for (let v = min; v <= max + 1; v += step) {
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(${v === 0 ? '--axis' : '--grid'})" stroke-width="1"/>`;
+    g += `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${yTick(v)}</text>`;
+  }
+  const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((W - m.l - m.r) / 64))));
+  values.forEach((v, i) => {
+    const x0 = m.l + i * band + (band - bw) / 2, y0 = y(0), y1 = y(v);
+    const h = Math.abs(y1 - y0);
+    if (h >= 0.5) {
+      const r = Math.min(4, h, bw / 2), s = y1 < y0 ? 1 : -1;
+      g += `<path d="M${x0},${y0}V${y1 + s * r}Q${x0},${y1} ${x0 + r},${y1}H${x0 + bw - r}Q${x0 + bw},${y1} ${x0 + bw},${y1 + s * r}V${y0}Z" fill="var(${v >= 0 ? '--pos' : '--neg'})"/>`;
+    }
+    if (showLabel(i, n, every)) g += `<text x="${x0 + bw / 2}" y="${H - 6}" text-anchor="middle">${esc(mon(labels[i]))}</text>`;
+    g += `<rect data-i="${i}" x="${m.l + i * band}" y="${m.t}" width="${band}" height="${H - m.t - m.b}" fill="transparent"/>`;
+  });
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="result per month">${g}</svg>`;
+  host.querySelectorAll('rect[data-i]').forEach(r => {
+    r.onpointermove = ev => showTip(ev, tipHtml(Number(r.dataset.i)));
+    r.onpointerleave = hideTip;
+  });
+}
+
+// ------------------------------------------------------------ today
+function renderToday() {
+  const d = S.data, el = $('#tab-today');
+  const total = d.cash + d.value;
+  const rows = d.positions.map(p => p.value == null
+    ? `<tr><td>${esc(p.name)}<span class="small">${esc(p.error)}</span></td><td>${shares(p.shares)}</td><td>–</td><td>–</td><td>–</td><td>${eur(p.cost)}</td><td>–</td><td>–</td></tr>`
+    : `<tr>
+        <td>${esc(p.name)}<span class="small">${esc(p.venue)} · ${time(p.at)}</span></td>
+        <td>${shares(p.shares)}</td>
+        <td>${price(p.last)}</td>
+        <td>${move(p.day, p.dayPct)}<span class="small">${signed(p.day)}</span></td>
+        <td>${eur(p.value)}</td>
+        <td>${eur(p.cost)}</td>
+        <td><span class="${dir(p.gain)}">${signed(p.gain)}</span><span class="small">${pct(p.gainPct)}</span></td>
+        <td>${p.weight == null ? '–' : `${N0.format(p.weight)} %`}</td>
+      </tr>`).join('');
+  el.innerHTML = `
+    <div class="card">
+      <div class="hero">
+        <div>
+          <div class="k">Today, all positions</div>
+          <div class="v ${dir(d.day)}">${signed(d.day)}</div>
+        </div>
+        <div class="d ${dir(d.day)}">${arrow(d.day)} ${pct(d.dayPct)}</div>
+      </div>
+      <div class="tiles">
+        <div class="tile"><div class="k">Stocks + crypto now</div><div class="v">${eur(d.value)}</div><div class="s">paid ${eur(d.cost)}</div></div>
+        <div class="tile"><div class="k">Gain since bought</div><div class="v ${dir(d.value - d.cost)}">${signed(d.value - d.cost)}</div><div class="s">${pct(d.cost ? (d.value / d.cost - 1) * 100 : null)}, not yet sold</div></div>
+        <div class="tile"><div class="k">Cash</div><div class="v">${eur(d.cash)}</div><div class="s">from export, ${day(d.asOf)}</div></div>
+        <div class="tile"><div class="k">Total at Trade Republic</div><div class="v">${eur(total)}</div><div class="s">you paid in ${eur(d.paidIn)}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Positions</h2>
+      <p class="sub">Live prices from LS Exchange, the venue Trade Republic trades on. Today = against yesterday's close.</p>
+      <div class="scroll"><table>
+        <thead><tr><th>Name</th><th>Shares</th><th>Price</th><th>Today</th><th>Value</th><th>Paid</th><th>Gain</th><th>Weight</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td>Total</td><td></td><td></td><td>${move(d.day, d.dayPct)}<span class="small">${signed(d.day)}</span></td><td>${eur(d.value)}</td><td>${eur(d.cost)}</td><td><span class="${dir(d.value - d.cost)}">${signed(d.value - d.cost)}</span></td><td></td></tr></tfoot>
+      </table></div>
+    </div>`;
+}
+
+// ------------------------------------------------------------ months
+function renderMonths() {
+  const d = S.data, el = $('#tab-months');
+  if (!d || d.empty || !el.classList.contains('on')) return;
+  const ms = d.months, labels = ms.map(m => m.month), all = S.mode === 'all';
+  const tipTitle = i => `${monLong(labels[i])}${ms[i].partial ? ' (so far)' : ''}`;
+  el.innerHTML = `
+    <div class="card">
+      <div class="row">
+        <div><h2>${all ? 'Earned so far, everything at Trade Republic' : 'Stocks + crypto only'}</h2>
+          <p class="sub" style="margin:0">${all ? 'Total value minus the money you paid in: interest, dividends and price moves, after tax and fees.' : 'Market value against what you paid. The gap is the gain not yet sold.'}</p></div>
+        <div class="seg" id="mode"><button data-m="all">Everything</button><button data-m="stocks">Stocks only</button></div>
+      </div>
+      ${all ? '' : '<div class="legend"><span><i style="background:var(--s1)"></i>Market value</span><span><i style="background:var(--s2)"></i>Paid for them</span></div>'}
+      <div class="chart" id="c-line"></div>
+    </div>
+    <div class="card">
+      <h2>${all ? 'What each month earned' : 'Price move per month'}</h2>
+      <p class="sub">${all ? 'Interest + dividends + price moves, after tax and fees. Money paid in is left out.' : 'Change in market value from prices alone, bought and sold shares left out.'}</p>
+      <div class="chart" id="c-bars"></div>
+    </div>
+    <div class="card">
+      <h2>Month by month</h2>
+      <p class="sub">Values at each month's last close. Return = what the month earned ÷ value at its start plus money paid in.</p>
+      <div class="scroll"><table>
+        <thead><tr><th>Month</th><th>Paid in</th><th>Interest</th><th>Dividends</th><th>Price move</th><th>Tax + fees</th><th>Earned</th><th>Return</th><th>Stocks</th><th>Cash</th><th>Total</th></tr></thead>
+        <tbody>${ms.slice().reverse().map(m => `<tr>
+          <td>${esc(mon(m.month))}${m.partial ? '<span class="small">so far</span>' : ''}</td>
+          <td>${m.paidIn ? signed(m.paidIn) : '–'}</td>
+          <td>${m.interest ? eur(m.interest) : '–'}</td>
+          <td>${m.dividends ? eur(m.dividends) : '–'}</td>
+          <td><span class="${dir(m.market)}">${m.market ? signed(m.market) : '–'}</span></td>
+          <td>${m.taxes + m.fees ? signed(m.taxes + m.fees) : '–'}</td>
+          <td><span class="${dir(m.result)}">${signed(m.result)}</span></td>
+          <td>${m.returnPct == null ? '–' : move(m.returnPct, m.returnPct)}</td>
+          <td>${m.value ? eur(m.value) : '–'}</td>
+          <td>${eur(m.cash)}</td>
+          <td>${eur(m.total)}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+  el.querySelectorAll('#mode button').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.m === S.mode));
+    b.onclick = () => { S.mode = b.dataset.m; store.set('tro.mode', S.mode); renderMonths(); };
+  });
+  lineChart($('#c-line'), {
+    labels, tipTitle,
+    series: all
+      ? [{ name: 'Earned so far', color: '--s1', values: ms.map(m => m.total - m.paidInTotal) }]
+      : [{ name: 'Market value', color: '--s1', values: ms.map(m => m.value) },
+         { name: 'Paid for them', color: '--s2', values: ms.map(m => m.cost) }],
+  });
+  barChart($('#c-bars'), {
+    labels, values: ms.map(m => all ? m.result : m.market),
+    tipHtml: i => {
+      const m = ms[i];
+      return `<div class="t">${esc(tipTitle(i))}</div>` + (all
+        ? tipRow('Interest', eur(m.interest)) + tipRow('Dividends', eur(m.dividends)) + tipRow('Price move', signed(m.market))
+          + tipRow('Tax + fees', signed(m.taxes + m.fees)) + tipRow('Earned', `<b>${signed(m.result)}</b>`)
+        : tipRow('Price move', `<b>${signed(m.market)}</b>`) + tipRow('Stocks at month end', eur(m.value)));
+    },
+  });
+}
+
+// ------------------------------------------------------------ taxes
+function renderTaxes() {
+  const d = S.data, el = $('#tab-taxes');
+  const ys = Object.keys(d.tax).map(Number).sort();
+  if (!S.year || !d.tax[S.year]) S.year = ys[ys.length - 1];
+  const t = d.tax[S.year], cur = S.year === Number(d.today.slice(0, 4)), A = t.allowance;
+  const p = t.projection, R = `${nf(0, 3).format(t.rate * 100)} %`;
+  const scale = Math.max(A, t.capital, p ? p.capital : 0, t.sellAll ? t.sellAll.capital : 0) * 1.0;
+  const w = c => `${Math.min(100, (c / scale) * 100)}%`;
+  const usedIn = Math.min(t.capital, A), projIn = p ? Math.max(0, Math.min(p.capital, A) - usedIn) : 0;
+  const over = Math.max(0, (p ? p.capital : t.capital) - A);
+  const state = (p ? p.over : t.over) > 0
+    ? `<span class="status"><span class="dot" style="background:var(--critical)"></span>⚠ Over the limit${p ? ' by December (estimate)' : ''}</span>`
+    : `<span class="status"><span class="dot" style="background:var(--good)"></span>✓ Under the limit${p ? ', also by December (estimate)' : ''}</span>`;
+  const sales = t.sales.length ? `
+    <div class="scroll"><table>
+      <thead><tr><th>Sold</th><th style="text-align:left">Name</th><th>Got</th><th>Paid</th><th>Gain</th><th>Tax withheld</th></tr></thead>
+      <tbody>${t.sales.map(s => `<tr><td>${day(s.date)}</td><td style="text-align:left">${esc(s.name)}${s.incomplete ? '<span class="small">buy older than the exports - cost unknown</span>' : ''}</td>
+        <td>${eur(s.proceeds)}</td><td>${eur(s.cost)}</td><td><span class="${dir(s.gain)}">${signed(s.gain)}</span></td><td>${s.tax ? signed(s.tax) : '–'}</td></tr>`).join('')}</tbody>
+    </table></div>` : '<p class="muted" style="margin:0">No stock sales this year.</p>';
+  const crypto = (t.crypto.open || []).map(c => `
+    <div class="fact">
+      <div class="k">${esc(c.name)}, bought ${day(c.bought)}</div>
+      <div class="v">${c.taxFree ? 'Tax-free to sell' : `Tax-free from ${day(c.taxFreeFrom)}`}</div>
+      <div class="s">${c.taxFree ? '' : `${c.daysLeft} days to go · `}gain now <span class="${dir(c.gain)}">${signed(c.gain)}</span></div>
+    </div>`).join('');
+  el.innerHTML = `
+    <div class="card">
+      <div class="row">
+        <div class="chips" style="margin:0">${ys.map(y => `<button class="chip" data-y="${y}" aria-pressed="${y === S.year}">${y}</button>`).join('')}</div>
+        ${state}
+      </div>
+      <div class="hero" style="margin-top:6px">
+        <div><div class="k">Used of your ${eur0(A)} tax-free allowance (Sparer-Pauschbetrag)${cur ? ' so far' : ''}</div>
+          <div class="v">${eur(t.capital)}</div></div>
+        <div class="d">${t.over ? `<span class="down">${eur(t.over)} over</span>` : `${eur(t.left)} left`}</div>
+      </div>
+      <div class="meter" role="img" aria-label="${eur(t.capital)} of ${eur(A)} used">
+        <span class="used" style="width:${w(usedIn)}"></span>
+        ${projIn ? `<span class="proj" style="left:${w(usedIn)};width:${w(projIn)}"></span>` : ''}
+        ${over ? `<span class="over" style="left:${w(A)};width:${w(over)}"></span>` : ''}
+      </div>
+      <div class="meter-scale"><span>0 €</span><span>${eur0(A)}${scale > A ? ` · scale to ${eur0(scale)}` : ''}</span></div>
+      <div class="keys">
+        <span><i style="background:var(--s1)"></i>Counted so far</span>
+        ${p ? '<span><i style="background:var(--proj)"></i>Still expected this year</span>' : ''}
+        ${over ? `<span><i style="background:var(--critical)"></i>Taxed at ${R}</span>` : ''}
+      </div>
+      <div class="settings">
+        <span>Filing</span>
+        <div class="seg"><button data-joint="0" aria-pressed="${!S.settings.joint}">Single · 1.000 €</button><button data-joint="1" aria-pressed="${!!S.settings.joint}">Joint · 2.000 €</button></div>
+        <span>Church tax</span>
+        <div class="seg">${[0, 0.08, 0.09].map(k => `<button data-church="${k}" aria-pressed="${Number(S.settings.church) === k}">${k ? `${k * 100} %` : 'None'}</button>`).join('')}</div>
+      </div>
+      <div class="facts">
+        <div class="fact"><div class="k">Tax due on what is counted</div><div class="v">${eur(t.tax)}</div><div class="s">${R} of anything above ${eur0(A)}</div></div>
+        ${p ? `<div class="fact"><div class="k">By 31 Dec (estimate)</div><div class="v">${eur(p.capital)}</div>
+               <div class="s">+${p.interestPayments} interest payments of ~${eur(p.interestEach)}${p.dividends ? ` + ~${eur(p.dividends)} dividends` : ''} → ${p.over ? `<span class="down">tax ${eur(p.tax)}</span>` : `${eur(p.left)} left`}</div></div>` : ''}
+        ${t.sellAll ? `<div class="fact"><div class="k">If you sold every stock today</div><div class="v ${dir(t.sellAll.unrealised)}">${signed(t.sellAll.unrealised)}</div>
+               <div class="s">gain after 1 € fee each → ${eur(t.sellAll.capital)} by December · ${t.sellAll.over ? `<span class="down">tax ${eur(t.sellAll.tax)}</span>` : 'still tax-free'}</div></div>` : ''}
+        <div class="fact"><div class="k">Trade Republic withheld${cur ? ' this year' : ''}</div><div class="v">${eur(-t.withheld)}</div>
+          <div class="s">${t.refunded ? `refunded ${eur(t.refunded)} · ` : ''}incl. foreign tax on dividends</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>What counts</h2>
+      <p class="sub">Interest, dividends and stock-sale gains share one pot. Stock losses only cancel stock gains, never interest.</p>
+      <div class="scroll"><table>
+        <tbody>
+          <tr><td>Interest</td><td class="muted">${t.interest.n} payment${t.interest.n === 1 ? '' : 's'}</td><td>${eur(t.interest.gross)}</td></tr>
+          <tr><td>Dividends, before tax</td><td class="muted">${t.dividends.n} payment${t.dividends.n === 1 ? '' : 's'}</td><td>${eur(t.dividends.gross)}</td></tr>
+          <tr><td>Gains from stock sales</td><td class="muted">${t.sales.filter(s => s.gain > 0).length} sale${t.sales.filter(s => s.gain > 0).length === 1 ? '' : 's'}</td><td>${eur(t.stockGains)}</td></tr>
+          <tr><td>Losses from stock sales</td><td class="muted">${t.sales.filter(s => s.gain < 0).length} sale${t.sales.filter(s => s.gain < 0).length === 1 ? '' : 's'}</td><td>${t.stockLosses ? signed(t.stockLosses) : eur(0)}</td></tr>
+          ${t.lossCarried ? `<tr><td>Stock losses carried to next year</td><td></td><td>${signed(t.lossCarried)}</td></tr>` : ''}
+        </tbody>
+        <tfoot><tr><td>Counted against ${eur0(A)}</td><td></td><td>${eur(t.capital)}</td></tr></tfoot>
+      </table></div>
+    </div>
+    <div class="card">
+      <h2>Stock sales ${S.year}</h2>
+      <p class="sub">Cost is first-in, first-out with the order fees, the way the Finanzamt counts it.</p>
+      ${sales}
+    </div>
+    <div class="card">
+      <h2>Crypto (separate rule)</h2>
+      <p class="sub">Not in the allowance pot. Held over one year: tax-free. Sold within a year: gains under 1.000 € a year are tax-free; at 1.000 € or more the <b>whole</b> gain is taxed at your income-tax rate.</p>
+      ${crypto ? `<div class="facts" style="margin-top:0">${crypto}</div>` : ''}
+      <p class="note">Crypto sold within a year in ${S.year}: ${signed(t.crypto.shortTermGain)} ${t.crypto.taxable ? '<b class="down">⚠ taxable</b>' : '(under the limit)'}</p>
+    </div>
+    <p class="note">This account only. Assumes your exemption order (Freistellungsauftrag) is at Trade Republic and you have no other capital income. An estimate, not tax advice.</p>`;
+  el.querySelectorAll('[data-y]').forEach(b => b.onclick = () => { S.year = Number(b.dataset.y); renderTaxes(); });
+  el.querySelectorAll('[data-joint]').forEach(b => b.onclick = () => { S.settings.joint = b.dataset.joint === '1'; save('tro.settings', S.settings); loadSummary(); });
+  el.querySelectorAll('[data-church]').forEach(b => b.onclick = () => { S.settings.church = Number(b.dataset.church); save('tro.settings', S.settings); loadSummary(); });
+}
+
+// ------------------------------------------------------------ news + watchlist
+const subjects = () => (S.data?.positions || []).map(p => ({ key: p.key, name: p.name, held: true }))
+  .concat(S.watch.map(w => ({ key: w.key, name: w.name, held: false })))
+  .filter((s, i, a) => a.findIndex(x => x.key === s.key) === i);
+async function loadNews() {
+  $('#newslist').innerHTML = '<li class="muted">Loading headlines…</li>';
+  try {
+    const json = body => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const [n, q] = await Promise.all([
+      api('/api/news', json({ subjects: subjects(), lang: S.lang })),
+      S.watch.length ? api('/api/quotes', json({ keys: S.watch.map(w => w.key) })) : {},
+    ]);
+    S.news = n; S.watchQuotes = q;
+    renderNews();
+  } catch (e) { $('#newslist').innerHTML = `<li class="down">${esc(e.message)}</li>`; }
+}
+function renderNews() {
+  const n = S.news; if (!n) return;
+  document.querySelectorAll('#lang button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === S.lang)));
+  const held = new Map((S.data?.positions || []).map(p => [p.key, p]));
+  const dayOf = k => {
+    if (held.has(k)) return held.get(k).dayPct;
+    const q = S.watchQuotes?.[k];
+    return q && !q.error && q.prev ? (q.last / q.prev - 1) * 100 : null;
+  };
+  const chip = s => `<button class="chip${s.held ? '' : ' watch'}" data-k="${esc(s.key)}" aria-pressed="${S.filter === s.key}">
+      ${esc(s.name)} <span class="pct ${dir(dayOf(s.key))}">${dayOf(s.key) == null ? '' : `${arrow(dayOf(s.key))} ${pct(dayOf(s.key))}`}</span>
+      ${s.held ? '' : `<span class="x" data-rm="${esc(s.key)}" title="Stop following">×</span>`}</button>`;
+  $('#chips').innerHTML = `<button class="chip" data-k="all" aria-pressed="${S.filter === 'all'}">All</button>` + subjects().map(chip).join('');
+  const seen = new Set();
+  const items = n.items.filter(i => (S.filter === 'all' ? !seen.has(i.link) && seen.add(i.link) : i.key === S.filter)).slice(0, 80);
+  $('#newslist').innerHTML = (items.length ? items.map(i => `<li>
+      <a href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a>
+      <div class="m">${esc(i.source)} · ${ago(i.at)} · <span class="tag">${esc(i.name)}</span></div></li>`).join('')
+    : `<li class="muted">${subjects().length ? 'No headlines in the last 7 days.' : 'Nothing to follow yet - upload an export or follow a stock above.'}</li>`)
+    + (n.errors.length ? `<li class="down">${n.errors.map(esc).join('<br>')}</li>` : '');
+  document.querySelectorAll('#chips .chip').forEach(c => c.onclick = ev => {
+    const rm = ev.target.closest('[data-rm]');
+    if (rm) {
+      ev.stopPropagation();
+      S.watch = S.watch.filter(w => w.key !== rm.dataset.rm); save('tro.watch', S.watch);
+      if (S.filter === rm.dataset.rm) S.filter = 'all';
+      return loadNews();
+    }
+    S.filter = c.dataset.k; renderNews();
+  });
+}
+document.querySelectorAll('#lang button').forEach(b => b.onclick = () => {
+  S.lang = b.dataset.lang; store.set('tro.lang', S.lang); loadNews();
+});
+$('#add').onsubmit = async ev => {
+  ev.preventDefault();
+  const q = $('#addq').value.trim(); if (!q) return;
+  const btn = ev.target.querySelector('button'); btn.disabled = true;
+  try {
+    const item = await api(`/api/search?q=${encodeURIComponent(q)}`);
+    if (subjects().some(s => s.key === item.key)) throw new Error(`${item.name} is already on the list`);
+    S.watch.push({ key: item.key, name: item.name }); save('tro.watch', S.watch);
+    $('#addq').value = ''; S.filter = item.key;
+    toast(`Following <b>${esc(item.name)}</b>`);
+    await loadNews();
+  } catch (e) { toast(`<span class="down">${esc(e.message)}</span>`); }
+  finally { btn.disabled = false; }
+};
+
+// ------------------------------------------------------------ upload (kept in this browser only)
+async function upload(files) {
+  files = [...files].filter(f => /\.csv$/i.test(f.name));
+  if (!files.length) return toast('Only .csv files - Trade Republic: Statements → Transaction export');
+  const texts = await Promise.all(files.map(f => f.text().then(text => ({ name: f.name, text }))));
+  const before = S.data?.rowCount ?? 0;
+  for (const t of texts) S.files = S.files.filter(f => f.name !== t.name).concat(t);
+  await loadSummary();
+  const report = new Map((S.data?.files || []).map(f => [f.name, f]));
+  const bad = texts.filter(t => !report.get(t.name)?.ok);
+  if (bad.length) { S.files = S.files.filter(f => !bad.some(b => b.name === f.name)); }
+  const kept = save('tro.files', S.files);
+  if (bad.length && !S.files.length) renderEmpty();
+  else if (bad.length) await loadSummary();
+  const added = (S.data?.rowCount ?? 0) - before;
+  toast(texts.map(t => report.get(t.name)?.ok
+      ? `<b>${esc(t.name)}</b>: ${report.get(t.name).rows} rows`
+      : `<b>${esc(t.name)}</b>: <span class="down">${esc(report.get(t.name)?.reason || 'could not read it')}</span>`).join('<br>')
+    + (texts.length > bad.length ? `<br>${added > 0 ? `${added} new transactions` : 'nothing new'}` : '')
+    + (kept ? '' : '<br><span class="down">Too big to keep in this browser - it is used for this session only.</span>'), 9000);
+}
+$('#file').onchange = e => { upload(e.target.files); e.target.value = ''; };
+let dragDepth = 0;
+addEventListener('dragenter', e => { if ([...e.dataTransfer.types].includes('Files')) { dragDepth++; $('#drop').classList.add('on'); } });
+addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('#drop').classList.remove('on'); } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); dragDepth = 0; $('#drop').classList.remove('on'); upload(e.dataTransfer.files); });
+$('#sample').onclick = async () => {
+  S.files = [{ name: 'sample.csv', text: await (await fetch('/sample.csv')).text() }];
+  save('tro.files', S.files);
+  loadSummary();
+};
+$('#forget').onclick = () => {
+  for (const k of ['tro.files', 'tro.watch', 'tro.settings']) { try { localStorage.removeItem(k); } catch {} }
+  Object.assign(S, { data: null, news: null, files: [], watch: [], filter: 'all', settings: { joint: false, church: 0 } });
+  renderEmpty();
+  toast('Removed from this browser.');
+};
+
+// ------------------------------------------------------------ load
+function renderEmpty() {
+  document.body.classList.add('empty');
+  $('#empty').hidden = false; $('#forget').hidden = !S.watch.length;
+  $('#banners').innerHTML = '';
+  $('#meta').textContent = 'Trade Republic transaction export → today, months, taxes, news.';
+}
+function renderMeta() {
+  const d = S.data;
+  const quoted = d.positions.map(p => p.at).filter(Boolean).sort().pop();
+  const sample = S.files.length === 1 && S.files[0].name === 'sample.csv';
+  $('#meta').textContent = `${sample ? 'Sample data · ' : ''}Transactions up to ${day(d.asOf)} · prices ${quoted ? `at ${time(quoted)}` : 'unavailable'} · refreshes every 5 min`;
+  const stale = (Date.parse(d.today) - Date.parse(d.asOf)) / 864e5;
+  const b = [];
+  if (stale > 10 && !sample) b.push(`<div class="banner"><b>The export ends ${day(d.asOf)}.</b> Anything bought, sold or paid in since is missing - upload a fresh transaction export.</div>`);
+  if (d.errors?.length) b.push(`<div class="banner">${d.errors.map(esc).join('<br>')}</div>`);
+  $('#banners').innerHTML = b.join('');
+}
+async function loadSummary() {
+  if (!S.files.length) return renderEmpty();
+  try {
+    S.data = await api('/api/summary', { method: 'POST', headers: { 'content-type': 'application/json' },
+                                         body: JSON.stringify({ files: S.files, settings: S.settings }) });
+    if (S.data.empty) return renderEmpty();
+    document.body.classList.remove('empty');
+    $('#empty').hidden = true; $('#forget').hidden = false;
+    renderMeta(); renderToday(); renderMonths(); renderTaxes();
+    // holdings may have changed: news follows them
+    if ($('#tab-news').classList.contains('on')) loadNews(); else S.news = null;
+  } catch (e) { $('#meta').innerHTML = `<span class="down">${esc(e.message)}</span>`; }
+}
+let resizeT;
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderMonths, 150); });
+setInterval(() => { if (document.visibilityState === 'visible' && S.files.length) loadSummary(); }, 5 * 60 * 1000);
+addEventListener('hashchange', () => showTab(location.hash.slice(1)));
+showTab(location.hash.slice(1));
+loadSummary();
+</script>
+</body>
+</html>
