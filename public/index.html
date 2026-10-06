@@ -154,6 +154,8 @@
   .range-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin:2px 0 10px}
   .range-head .v{font-size:22px;font-weight:600}
   tr.clickable{cursor:pointer}
+  .gain{cursor:pointer;user-select:none}
+  th.gain{color:var(--ink)}
   tr.clickable:hover td{background:var(--wash)}
   #side{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--surface);border-left:1px solid var(--line);
         box-shadow:-12px 0 32px rgba(0,0,0,.28);transform:translateX(105%);transition:transform .18s ease;z-index:15;
@@ -396,6 +398,12 @@ function barChart(host, { labels, values, tipHtml }) {
 }
 
 // ------------------------------------------------------------ today
+// Gain since bought: € or % first, the other small underneath. Click to switch.
+const G = { pct: store.get('tro.gainpct', '') === '1' };
+const gainCell = (c, p) => G.pct
+  ? `<span class="${dir(c)}">${pct(p)}</span><span class="small">${signed(c)}</span>`
+  : `<span class="${dir(c)}">${signed(c)}</span><span class="small">${pct(p)}</span>`;
+
 function renderToday() {
   const d = S.data, el = $('#tab-today');
   const total = d.cash + d.value;
@@ -408,7 +416,7 @@ function renderToday() {
         <td>${move(p.day, p.dayPct)}<span class="small">${signed(p.day)}</span></td>
         <td>${eur(p.value)}</td>
         <td>${eur(p.cost)}</td>
-        <td><span class="${dir(p.gain)}">${signed(p.gain)}</span><span class="small">${pct(p.gainPct)}</span></td>
+        <td class="gain" title="Click: € / %">${gainCell(p.gain, p.gainPct)}</td>
         <td>${p.weight == null ? '–' : `${N0.format(p.weight)} %`}</td>
       </tr>`).join('');
   el.innerHTML = `
@@ -445,9 +453,9 @@ function renderToday() {
       <h2>Positions</h2>
       <p class="sub">Live prices from LS Exchange, the venue Trade Republic trades on. Today = against yesterday's close. Click a position for its analysis.</p>
       <div class="scroll"><table>
-        <thead><tr><th>Name</th><th>Shares</th><th>Price</th><th>Today</th><th>Value</th><th>Paid</th><th>Gain</th><th>Weight</th></tr></thead>
+        <thead><tr><th>Name</th><th>Shares</th><th>Price</th><th>Today</th><th>Value</th><th>Paid</th><th class="gain" title="Click: € / %">Gain since bought ${G.pct ? '%' : '€'} ⇄</th><th>Weight</th></tr></thead>
         <tbody>${rows}</tbody>
-        <tfoot><tr><td>Total</td><td></td><td></td><td>${move(d.day, d.dayPct)}<span class="small">${signed(d.day)}</span></td><td>${eur(d.value)}</td><td>${eur(d.cost)}</td><td><span class="${dir(d.value - d.cost)}">${signed(d.value - d.cost)}</span></td><td></td></tr></tfoot>
+        <tfoot><tr><td>Total</td><td></td><td></td><td>${move(d.day, d.dayPct)}<span class="small">${signed(d.day)}</span></td><td>${eur(d.value)}</td><td>${eur(d.cost)}</td><td class="gain">${gainCell(d.value - d.cost, d.cost ? (d.value / d.cost - 1) * 100 : null)}</td><td></td></tr></tfoot>
       </table></div>
     </div>`;
   el.insertAdjacentHTML('beforeend', `
@@ -457,6 +465,10 @@ function renderToday() {
       <div class="alloc" id="alloc"></div>
     </div>`);
   el.querySelectorAll('tr[data-key]').forEach(tr => tr.onclick = () => openAnalysis(tr.dataset.key));
+  el.querySelectorAll('.gain').forEach(c => c.onclick = ev => {
+    ev.stopPropagation();                                // a gain cell switches € / %, it does not open the sidebar
+    G.pct = !G.pct; store.set('tro.gainpct', G.pct ? '1' : ''); renderToday();
+  });
   renderDepotChart(); renderIntraday(); renderAllocation();
 }
 
