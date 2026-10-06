@@ -865,9 +865,12 @@ function renderDepotChart() {
   if (pts.length < 2) pts = d.daily.slice(-2);
   const result = p => p.value - p.cost + p.realised;
   const a = pts[0], b = pts[pts.length - 1], change = result(b) - result(a);
+  // % of the most that was invested during the range. Dividing by the first day's value
+  // inflates it whenever the depot started small (72,94 € -> +520 %).
+  const base = Math.max(...pts.map(p => p.cost));
   $('#depot-head').innerHTML = `<span class="v ${dir(change)}">${signed(change)}</span>
-    <span class="${dir(change)}">${arrow(change)} ${pct(a.value ? change / a.value * 100 : null)}</span>
-    <span class="muted">${D.range === 'All' ? 'since the first buy' : `over ${D.range === 'YTD' ? 'this year' : D.range}`} · price moves only, buys and sells left out</span>`;
+    <span class="${dir(change)}">${arrow(change)} ${pct(base ? change / base * 100 : null)}</span>
+    <span class="muted">on ${eur0(base)} invested · ${D.range === 'All' ? 'since the first buy' : `over ${D.range === 'YTD' ? 'this year' : D.range}`} · price moves only, sold gains included</span>`;
   timeChart(host, {
     dates: pts.map(p => p.d),
     series: [{ name: 'Value', color: '--s1', values: pts.map(p => p.value) },
