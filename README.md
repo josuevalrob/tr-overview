@@ -9,6 +9,7 @@ your own machine, keep your data there. No account login, no database, no depend
 | **Months** | what the account earned so far, stocks value vs cost, what each month earned, a month-by-month table |
 | **Taxes** | the Sparer-Pauschbetrag used per year, an estimate to 31 Dec, "if you sold everything today", stock sales (FIFO), crypto holding periods |
 | **News** | Google News headlines (English / German) for every holding, plus any stock you choose to follow |
+| **Analysis** (click a position) | sidebar: 52-week range, financials (annual since ~2016 + EPS/dividend estimates; quarterly for US shares), analysts' buy/hold/sell and price targets, next earnings date, dividends |
 
 ## Run it
 
@@ -46,6 +47,11 @@ The monthly *Account statement* is a PDF with net amounts only (no fee, no tax) 
 - **Prices:** onvista's public API, no key. It resolves by ISIN and lists LS Exchange, the venue
   Trade Republic trades on, so prices match the app. Only EUR quotes are used. Unofficial: if it
   changes, the page says which instrument has no price instead of guessing.
+- **Analysis:** onvista figures (all stocks; revenue derived as EBITDA ÷ EBITDA margin, net income as
+  revenue × net margin) and Nasdaq's public API for US-listed shares only — analysts, price targets,
+  earnings dates, quarterly results, dividend payments. Non-US tickers are never sent to Nasdaq, since
+  the same symbol can be another company there. Trade Republic's derivatives long/short ratio is its own
+  customer data and is not public.
 - **News:** Google News RSS, searched by the company name from the export, last 7 days. A plain
   keyword search — generic names can pull in unrelated headlines.
 
@@ -75,6 +81,7 @@ data/               your exports and followed stocks (git-ignored)
 lib/portfolio.mjs   merge exports, FIFO lots, positions, months, tax
 lib/market.mjs      onvista: ISIN -> LS Exchange quote, daily closes
 lib/news.mjs        Google News RSS
+lib/analysis.mjs    per-stock analysis: onvista figures + Nasdaq (US only)
 lib/csv.mjs         CSV parsing, euro -> cents
 public/index.html   the page - no build step, no framework
 public/sample.csv   made-up transactions for the demo

@@ -143,6 +143,30 @@
   .steps b{color:var(--ink)}
   body.empty nav.tabs, body.empty section.tab{display:none !important}
   .settings{display:flex;gap:10px 18px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink2);margin-top:12px}
+  tr.clickable{cursor:pointer}
+  tr.clickable:hover td{background:var(--wash)}
+  #side{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--surface);border-left:1px solid var(--line);
+        box-shadow:-12px 0 32px rgba(0,0,0,.28);transform:translateX(105%);transition:transform .18s ease;z-index:15;
+        overflow-y:auto;padding:16px 18px 40px}
+  #side.on{transform:none}
+  #side .x{position:sticky;top:0;float:right;font:inherit;font-size:20px;line-height:1;background:var(--raised);color:var(--ink2);
+           border:1px solid var(--line);border-radius:8px;width:32px;height:32px;cursor:pointer}
+  #side h2{margin:0;font-size:18px;font-weight:600;padding-right:40px}
+  #side h3{margin:0 0 8px;font-size:13px;font-weight:600}
+  #side .id{font-size:12px;color:var(--muted);margin-top:2px}
+  .sec{border-top:1px solid var(--line);padding:14px 0 4px;margin-top:12px}
+  .px{display:flex;align-items:baseline;gap:10px;margin-top:10px}
+  .px .v{font-size:26px;font-weight:600}
+  .rng{position:relative;height:6px;background:var(--track);border-radius:3px;margin:14px 0 4px}
+  .rng i{position:absolute;top:-5px;width:3px;height:16px;border-radius:2px;background:var(--ink);transform:translateX(-50%)}
+  .rng-l{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)}
+  .votes{display:flex;gap:2px;height:12px;border-radius:6px;overflow:hidden;margin:8px 0 6px}
+  .votes span{display:block}
+  .kv{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:13px}
+  .kv span:nth-child(odd){color:var(--ink2)}
+  .kv span:nth-child(even){text-align:right;font-variant-numeric:tabular-nums}
+  #side table{font-size:12.5px}
+  #side .seg{margin:0 6px 8px 0}
   @media (max-width:600px){ .hero .v{font-size:40px} }
 </style>
 </head>
@@ -200,6 +224,7 @@
 </div>
 <div id="tip"></div>
 <div id="drop"><div>Drop the Trade Republic transaction export</div></div>
+<aside id="side" aria-label="Analysis" hidden></aside>
 <div id="toast"></div>
 
 <script>
@@ -365,8 +390,8 @@ function renderToday() {
   const d = S.data, el = $('#tab-today');
   const total = d.cash + d.value;
   const rows = d.positions.map(p => p.value == null
-    ? `<tr><td>${esc(p.name)}<span class="small">${esc(p.error)}</span></td><td>${shares(p.shares)}</td><td>–</td><td>–</td><td>–</td><td>${eur(p.cost)}</td><td>–</td><td>–</td></tr>`
-    : `<tr>
+    ? `<tr class="clickable" data-key="${esc(p.key)}"><td>${esc(p.name)}<span class="small">${esc(p.error)}</span></td><td>${shares(p.shares)}</td><td>–</td><td>–</td><td>–</td><td>${eur(p.cost)}</td><td>–</td><td>–</td></tr>`
+    : `<tr class="clickable" data-key="${esc(p.key)}" title="Analysis">
         <td>${esc(p.name)}<span class="small">${esc(p.venue)} · ${time(p.at)}</span></td>
         <td>${shares(p.shares)}</td>
         <td>${price(p.last)}</td>
@@ -394,13 +419,14 @@ function renderToday() {
     </div>
     <div class="card">
       <h2>Positions</h2>
-      <p class="sub">Live prices from LS Exchange, the venue Trade Republic trades on. Today = against yesterday's close.</p>
+      <p class="sub">Live prices from LS Exchange, the venue Trade Republic trades on. Today = against yesterday's close. Click a position for its analysis.</p>
       <div class="scroll"><table>
         <thead><tr><th>Name</th><th>Shares</th><th>Price</th><th>Today</th><th>Value</th><th>Paid</th><th>Gain</th><th>Weight</th></tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr><td>Total</td><td></td><td></td><td>${move(d.day, d.dayPct)}<span class="small">${signed(d.day)}</span></td><td>${eur(d.value)}</td><td>${eur(d.cost)}</td><td><span class="${dir(d.value - d.cost)}">${signed(d.value - d.cost)}</span></td><td></td></tr></tfoot>
       </table></div>
     </div>`;
+  el.querySelectorAll('tr[data-key]').forEach(tr => tr.onclick = () => openAnalysis(tr.dataset.key));
 }
 
 // ------------------------------------------------------------ months
@@ -561,6 +587,152 @@ function renderTaxes() {
   el.querySelectorAll('[data-church]').forEach(b => b.onclick = () => { S.settings.church = Number(b.dataset.church); save('tro.settings', S.settings); loadSummary(); });
 }
 
+// ------------------------------------------------------------ analysis sidebar
+const CMP = { format: v => {                     // 637,2 bn - German decimals, English units
+  const a = Math.abs(v), [d, u] = a >= 1e12 ? [1e12, ' tn'] : a >= 1e9 ? [1e9, ' bn'] : a >= 1e6 ? [1e6, ' m'] : a >= 1e3 ? [1e3, ' k'] : [1, ''];
+  return `${nf(0, 1).format(v / d)}${u}`;
+} };
+const big = (v, cur = 'EUR') => v == null ? '–' : `${CMP.format(v)} ${cur === 'USD' ? '$' : '€'}`;
+const money = (v, cur = 'EUR') => v == null ? '–' : `${nf(2, 2).format(v)} ${cur === 'USD' ? '$' : '€'}`;
+const A = { key: null, data: null, period: 'annual', metric: 'revenue' };
+
+function closeAnalysis() { const el = $('#side'); el.classList.remove('on'); setTimeout(() => { el.hidden = true; }, 200); A.key = null; }
+addEventListener('keydown', e => { if (e.key === 'Escape' && A.key) closeAnalysis(); });
+
+async function openAnalysis(key) {
+  const el = $('#side');
+  A.key = key; A.data = null;
+  el.hidden = false; void el.offsetWidth; el.classList.add('on');      // reflow first, so it slides in
+  el.innerHTML = `<button class="x" aria-label="Close">×</button><h2>${esc(displayName(key))}</h2><p class="muted">Loading analysis…</p>`;
+  el.querySelector('.x').onclick = closeAnalysis;
+  try {
+    const d = await api(`/api/analysis/${encodeURIComponent(key)}`);
+    if (A.key !== key) return;                      // another one was opened meanwhile
+    A.data = d;
+    if (A.period === 'quarterly' && !d.us?.quarterly) A.period = 'annual';
+    renderAnalysis();
+  } catch (e) { if (A.key === key) el.innerHTML += `<p class="down">${esc(e.message)}</p>`; }
+}
+
+const heldPos = key => (S.data?.positions || []).find(p => p.key === key);
+const watchItem = key => S.watch.find(w => w.key === key);
+const displayName = key => heldPos(key)?.name || watchItem(key)?.name || key;
+
+function renderAnalysis() {
+  const d = A.data, el = $('#side'), pos = heldPos(d.key), w = watchItem(d.key);
+  const last = pos?.last ?? (w?.quote && !w.quote.error ? w.quote.last : null);
+  const prev = pos?.prev ?? (w?.quote && !w.quote.error ? w.quote.prev : null);
+  const dayPct = last != null && prev ? (last / prev - 1) * 100 : null;
+  const pr = d.profile, us = d.us, an = us?.analysts;
+
+  const range = d.range && last != null ? (() => {
+    const p = Math.max(0, Math.min(100, ((last - d.range.low) / ((d.range.high - d.range.low) || 1)) * 100));
+    return `<div class="rng" role="img" aria-label="52-week range"><i style="left:${p}%"></i></div>
+      <div class="rng-l"><span>52-week low ${money(d.range.low)}</span><span>high ${money(d.range.high)}</span></div>`;
+  })() : '';
+
+  const analysts = an ? (() => {
+    const n = an.buy + an.hold + an.sell;
+    const seg = (v, c) => v ? `<span style="flex:${v};background:var(${c})"></span>` : '';
+    return `<div class="sec"><h3>Analysts${an.consensus ? ` · consensus <b>${esc(an.consensus)}</b>` : ''}</h3>
+      <div class="votes" role="img" aria-label="${an.buy} buy, ${an.hold} hold, ${an.sell} sell">${seg(an.buy, '--good')}${seg(an.hold, '--axis')}${seg(an.sell, '--critical')}</div>
+      <div class="keys" style="margin:0 0 10px"><span><i style="background:var(--good)"></i>Buy ${an.buy} (${N0.format(an.buy / n * 100)} %)</span>
+        <span><i style="background:var(--axis)"></i>Hold ${an.hold}</span><span><i style="background:var(--critical)"></i>Sell ${an.sell}</span></div>
+      <div class="kv">
+        <span>Price target (average)</span><span><b>${money(an.target, 'USD')}</b></span>
+        <span>Range of targets</span><span>${money(an.low, 'USD')} – ${money(an.high, 'USD')}</span>
+        ${an.price ? `<span>vs price now ${money(an.price, 'USD')}</span><span class="${dir(an.upside)}">${arrow(an.upside)} ${pct(an.upside)}</span>` : ''}
+      </div></div>`;
+  })() : '';
+
+  const today = new Date().toISOString().slice(0, 10);
+  const nextDiv = (us?.dividends || []).find(x => x.exDate >= today);
+  const lastDiv = (us?.dividends || []).find(x => x.exDate < today);
+  const days = iso => Math.round((Date.parse(iso) - Date.parse(today)) / 864e5);
+  const events = us && (us.earningsDate || lastDiv || nextDiv) ? `<div class="sec"><h3>Events</h3><div class="kv">
+      ${us.earningsDate ? `<span>Next earnings</span><span>${day(us.earningsDate)}${days(us.earningsDate) >= 0 ? ` · in ${days(us.earningsDate)} days` : ''}</span>` : ''}
+      ${nextDiv ? `<span>Next ex-dividend</span><span>${day(nextDiv.exDate)} · ${money(nextDiv.amount, 'USD')}</span>` : ''}
+      ${lastDiv ? `<span>Last ex-dividend</span><span>${day(lastDiv.exDate)} · ${money(lastDiv.amount, 'USD')}</span>` : ''}
+    </div></div>` : '';
+
+  // financials: annual (onvista, EUR, with estimates) or quarterly (Nasdaq, USD)
+  const quarterly = A.period === 'quarterly' && us?.quarterly;
+  const metrics = quarterly ? [['revenue', 'Revenue'], ['ebit', 'EBIT'], ['netIncome', 'Net income']]
+                            : [['revenue', 'Revenue'], ['ebitda', 'EBITDA'], ['netIncome', 'Net income']];
+  if (!metrics.some(([k]) => k === A.metric)) A.metric = 'revenue';
+  const rowsF = quarterly ? us.quarterly.map(q => ({ label: q.period.slice(0, 7), ...q }))
+                          : d.annual.filter(r => !r.estimate);
+  const cur = quarterly ? 'USD' : 'EUR';
+  const fin = d.annual.length || us?.quarterly ? `<div class="sec"><h3>Financials</h3>
+      <div>${us?.quarterly ? `<div class="seg" id="a-period"><button data-p="annual" aria-pressed="${!quarterly}">Annual</button><button data-p="quarterly" aria-pressed="${!!quarterly}">Quarterly</button></div>` : ''}
+      <div class="seg" id="a-metric">${metrics.map(([k, l]) => `<button data-m="${k}" aria-pressed="${A.metric === k}">${l}</button>`).join('')}</div></div>
+      <div class="chart" id="a-chart"></div>
+      <div class="scroll"><table><thead><tr><th>${quarterly ? 'Quarter' : 'Year'}</th><th>Revenue</th><th>${quarterly ? 'EBIT' : 'EBITDA'}</th><th>Net income</th>${quarterly ? '' : '<th>EPS</th>'}</tr></thead>
+        <tbody>${(quarterly ? us.quarterly.map(q => ({ ...q, label: q.period.slice(0, 7) })) : d.annual).slice().reverse().map(r => `<tr>
+          <td>${esc(r.label)}${r.estimate ? ' <span class="muted">est.</span>' : ''}</td><td>${big(r.revenue, cur)}</td><td>${big(quarterly ? r.ebit : r.ebitda, cur)}</td>
+          <td class="${dir(r.netIncome)}">${big(r.netIncome, cur)}</td>${quarterly ? '' : `<td>${r.eps == null ? '–' : nf(2, 2).format(r.eps)}</td>`}</tr>`).join('')}</tbody></table></div>
+      <p class="note">${quarterly ? 'Last quarters as reported, USD (Nasdaq).' : 'EUR (onvista). Revenue = EBITDA ÷ EBITDA margin; net income = revenue × net margin. Estimates (est.) only cover EPS and dividends.'}</p></div>` : '';
+
+  const divYears = d.annual.filter(r => r.dps);
+  const dividends = divYears.length || us?.dividends?.length ? `<div class="sec"><h3>Dividends</h3>
+      ${divYears.length ? `<div class="scroll"><table><thead><tr><th>Year</th><th>Per share</th><th>Yield</th></tr></thead><tbody>
+        ${divYears.slice(-6).reverse().map(r => `<tr><td>${esc(r.label)}${r.estimate ? ' <span class="muted">est.</span>' : ''}</td><td>${money(r.dps)}</td><td>${r.divYield == null ? '–' : `${nf(1, 2).format(r.divYield)} %`}</td></tr>`).join('')}
+      </tbody></table></div>` : ''}
+      ${us?.dividends?.length ? `<p class="note">Recent payments: ${us.dividends.slice(0, 4).map(x => `${day(x.exDate)} ${money(x.amount, 'USD')}`).join(' · ')}</p>` : ''}
+    </div>` : (pr ? `<div class="sec"><h3>Dividends</h3><p class="muted" style="margin:0">No dividend.</p></div>` : '');
+
+  el.innerHTML = `<button class="x" aria-label="Close">×</button>
+    <h2>${esc(displayName(d.key))}</h2>
+    <div class="id">${[d.isin, pr?.sector, pr?.country].filter(Boolean).map(esc).join(' · ')}</div>
+    ${last != null ? `<div class="px"><span class="v">${price(last)}</span>${dayPct != null ? move(dayPct, dayPct) : ''}</div>` : ''}
+    ${range}
+    <div class="kv" style="margin-top:12px">
+      ${pr?.marketCap ? `<span>Market value</span><span>${big(pr.marketCap, pr.marketCapCurrency)}</span>` : ''}
+      ${pos ? `<span>You hold</span><span>${shares(pos.shares)} · ${eur(pos.value)}</span><span>Your gain</span><span class="${dir(pos.gain)}">${signed(pos.gain)} (${pct(pos.gainPct)})</span>` : ''}
+    </div>
+    ${analysts}${events}${fin}${dividends}
+    ${d.notes.length ? `<p class="note">${d.notes.map(esc).join(' ')}</p>` : ''}
+    <p class="note">Sources: onvista${us ? ', Nasdaq' : ''}. Not investment advice.</p>`;
+  el.querySelector('.x').onclick = closeAnalysis;
+  el.querySelectorAll('#a-period button').forEach(b => b.onclick = () => { A.period = b.dataset.p; renderAnalysis(); });
+  el.querySelectorAll('#a-metric button').forEach(b => b.onclick = () => { A.metric = b.dataset.m; renderAnalysis(); });
+  const host = $('#a-chart');
+  if (host) {
+    const pts = rowsF.filter(r => r[A.metric] != null);
+    if (pts.length) finChart(host, pts.map(r => r.label), pts.map(r => r[A.metric]), cur, metrics.find(([k]) => k === A.metric)[1]);
+  }
+}
+
+/** Columns for one financial metric. Negative years grow down in the diverging red. */
+function finChart(host, labels, values, cur, name) {
+  const W = Math.max(300, host.clientWidth), H = 170, m = { l: 48, r: 8, t: 10, b: 24 };
+  const hi = Math.max(0, ...values), lo = Math.min(0, ...values);
+  const step = niceStep((hi - lo || 1) / 4);
+  const max = Math.ceil(hi / step) * step, min = Math.floor(lo / step) * step;
+  const y = v => m.t + (H - m.t - m.b) * ((max - v) / (max - min || 1));
+  const n = values.length, band = (W - m.l - m.r) / n, bw = Math.min(24, band * 0.62);
+  let g = '';
+  for (let v = min; v <= max + step / 2; v += step) {
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(${Math.abs(v) < step / 2 ? '--axis' : '--grid'})" stroke-width="1"/>`;
+    g += `<text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${esc(CMP.format(v))}</text>`;
+  }
+  const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((W - m.l - m.r) / 44))));
+  values.forEach((v, i) => {
+    const x0 = m.l + i * band + (band - bw) / 2, y0 = y(0), y1 = y(v), h = Math.abs(y1 - y0);
+    if (h >= 0.5) {
+      const r = Math.min(4, h, bw / 2), sg = y1 < y0 ? 1 : -1;
+      g += `<path d="M${x0},${y0}V${y1 + sg * r}Q${x0},${y1} ${x0 + r},${y1}H${x0 + bw - r}Q${x0 + bw},${y1} ${x0 + bw},${y1 + sg * r}V${y0}Z" fill="var(${v >= 0 ? '--pos' : '--neg'})"/>`;
+    }
+    if (showLabel(i, n, every)) g += `<text x="${x0 + bw / 2}" y="${H - 6}" text-anchor="middle">${esc(labels[i])}</text>`;
+    g += `<rect data-i="${i}" x="${m.l + i * band}" y="${m.t}" width="${band}" height="${H - m.t - m.b}" fill="transparent"/>`;
+  });
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(name)} by period">${g}</svg>`;
+  host.querySelectorAll('rect[data-i]').forEach(r => {
+    r.onpointermove = ev => showTip(ev, `<div class="t">${esc(labels[r.dataset.i])}</div>` + tipRow(name, big(values[r.dataset.i], cur)));
+    r.onpointerleave = hideTip;
+  });
+}
+
 // ------------------------------------------------------------ news + watchlist
 const post = body => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 async function loadNews() {
@@ -590,7 +762,9 @@ function renderNews() {
   const chip = s => `<button class="chip${s.held ? '' : ' watch'}" data-k="${esc(s.key)}" aria-pressed="${S.filter === s.key}">
       ${esc(s.name)} <span class="pct ${dir(dayOf(s.key))}">${dayOf(s.key) == null ? '' : `${arrow(dayOf(s.key))} ${pct(dayOf(s.key))}`}</span>
       ${s.held ? '' : `<span class="x" data-rm="${esc(s.key)}" title="Stop following">×</span>`}</button>`;
-  $('#chips').innerHTML = `<button class="chip" data-k="all" aria-pressed="${S.filter === 'all'}">All</button>` + n.subjects.map(chip).join('');
+  $('#chips').innerHTML = `<button class="chip" data-k="all" aria-pressed="${S.filter === 'all'}">All</button>` + n.subjects.map(chip).join('')
+    + (S.filter !== 'all' ? `<button class="btn" id="chip-analysis" type="button">Analysis →</button>` : '');
+  if ($('#chip-analysis')) $('#chip-analysis').onclick = () => openAnalysis(S.filter);
   const seen = new Set();
   const items = n.items.filter(i => (S.filter === 'all' ? !seen.has(i.link) && seen.add(i.link) : i.key === S.filter)).slice(0, 80);
   $('#newslist').innerHTML = (items.length ? items.map(i => `<li>
@@ -599,6 +773,7 @@ function renderNews() {
     : `<li class="muted">${n.subjects.length ? 'No headlines in the last 7 days.' : 'Nothing to follow yet - upload an export or follow a stock above.'}</li>`)
     + (n.errors.length ? `<li class="down">${n.errors.map(esc).join('<br>')}</li>` : '');
   document.querySelectorAll('#chips .chip').forEach(c => c.onclick = async ev => {
+    if (!c.dataset.k) return;
     const rm = ev.target.closest('[data-rm]');
     if (rm) {
       ev.stopPropagation();

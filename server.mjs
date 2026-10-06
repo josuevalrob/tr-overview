@@ -17,6 +17,7 @@
  *   GET    /api/watchlist                               followed stocks with today's move
  *   POST   /api/watchlist    {query}                    follow a name or an ISIN
  *   DELETE /api/watchlist/<key>
+ *   GET    /api/analysis/<key>                         financials, analysts, events, dividends
  */
 import http from 'node:http';
 import fs from 'node:fs';
@@ -25,6 +26,7 @@ import { loadAll, mergeExports, parseExport, isTrExport, replay, holdings, posit
          taxYear, taxSettings, years } from './lib/portfolio.mjs';
 import { quote, closes, search, pool } from './lib/market.mjs';
 import { headlines } from './lib/news.mjs';
+import { analysis } from './lib/analysis.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const PUB  = path.join(HERE, 'public');
@@ -145,6 +147,7 @@ async function api(req, url) {
     const body = req.method === 'POST' ? await readJson(req) : {};
     return [200, await news(body.lang === 'de' ? 'de' : body.lang ? 'en' : lang, body.subjects)];
   }
+  if (req.method === 'GET' && part[0] === 'analysis' && part[1]) return [200, await analysis(decodeURIComponent(part[1]))];
   if (part[0] === 'watchlist') {
     if (req.method === 'GET') {
       const list = readWatch(), q = await quotesFor(list.map(w => w.key));
