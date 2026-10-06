@@ -1,7 +1,7 @@
 # tr-overview
 
-A depot overview for Trade Republic, built from its **transaction export**. No account login, no
-database, no dependencies.
+A depot overview for Trade Republic, built from its **transaction export**. Download it, run it on
+your own machine, keep your data there. No account login, no database, no dependencies.
 
 | Tab | |
 |---|---|
@@ -15,11 +15,13 @@ database, no dependencies.
 Node 20 or newer. Nothing to install.
 
 ```bash
+git clone https://github.com/josuevalrob/tr-overview.git
+cd tr-overview
 node server.mjs            # http://localhost:3000   (PORT=8080 node server.mjs to change)
 npm run check              # offline checks of the model against the sample
 ```
 
-Open the page, then either **Try with sample data** or upload your own export.
+Open the page, then either **Try with sample data** (shown, never saved) or upload your own export.
 
 ## Getting the export
 
@@ -29,13 +31,15 @@ nothing is counted twice.
 
 The monthly *Account statement* is a PDF with net amounts only (no fee, no tax) and is not read.
 
-## Privacy
+## Your data
 
-- The CSV stays **in your browser** (localStorage). It is sent with each request so the server can
-  calculate, and the server writes nothing to disk and keeps nothing after answering.
-- Only public market data is cached, in memory.
-- **Forget my data** removes the export, the followed stocks and the settings from the browser.
-- `.gitignore` keeps every `*.csv` out of the repo except `public/sample.csv`, which is made up.
+- Uploaded exports are saved, untouched, in **`data/`** next to the app (`DATA_DIR=/some/folder` to
+  move it). Followed stocks go to `data/watchlist.json`. Delete a file to undo an upload.
+- `data/` is in `.gitignore`, as is every `*.csv` except the made-up `public/sample.csv` — your
+  transactions can never end up in a commit.
+- The server listens on `127.0.0.1` only. What leaves your machine: price requests to onvista (by
+  ISIN) and news searches to Google News (by company name). Never your transactions.
+- The browser only remembers view settings (tab, language, tax options).
 
 ## Data sources
 
@@ -66,7 +70,8 @@ no other capital income, no Vorabpauschale. An estimate, not tax advice.
 ## Layout
 
 ```
-server.mjs          HTTP server + /api/{summary,news,quotes,search}, stateless
+server.mjs          local HTTP server: the page + /api/{summary,upload,preview,news,watchlist}
+data/               your exports and followed stocks (git-ignored)
 lib/portfolio.mjs   merge exports, FIFO lots, positions, months, tax
 lib/market.mjs      onvista: ISIN -> LS Exchange quote, daily closes
 lib/news.mjs        Google News RSS

@@ -151,7 +151,6 @@
   <header>
     <div class="top">
       <h1>Depot overview</h1>
-      <button class="btn" id="forget" type="button" hidden>Forget my data</button>
       <label class="btn primary" for="file">Upload export</label>
       <input id="file" type="file" accept=".csv,text/csv" multiple hidden>
     </div>
@@ -173,7 +172,7 @@
         <li>Drop the file anywhere on this page, or use <b>Upload export</b>.</li>
         <li>Upload a fresh export whenever you like. Rows you already have are skipped.</li>
       </ol>
-      <p class="sub">The file stays in this browser. The server uses it only to calculate and keeps nothing. Prices: onvista (LS Exchange). News: Google News.</p>
+      <p class="sub">Everything stays on your machine: exports are saved in the <b>data/</b> folder next to the app, which git ignores. Prices: onvista (LS Exchange). News: Google News.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <label class="btn primary" for="file">Upload export</label>
         <button class="btn" id="sample" type="button">Try with sample data</button>
@@ -211,10 +210,11 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
 const load = (k, d) => { try { return JSON.parse(store.get(k, '')) ?? d; } catch { return d; } };
-// Everything the user gives us lives here, in this browser - the server keeps nothing.
+// Data lives in the local server's data/ folder. The browser only remembers view settings;
+// `preview` holds the sample CSV while it is shown - it is never saved.
 const S = { data: null, mode: store.get('tro.mode', 'all'), year: null, lang: store.get('tro.lang', 'en'),
-            filter: 'all', news: null,
-            files: load('tro.files', []), watch: load('tro.watch', []), settings: load('tro.settings', { joint: false, church: 0 }) };
+            filter: 'all', news: null, preview: null, watch: [],
+            settings: load('tro.settings', { joint: false, church: 0 }) };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 
 // ------------------------------------------------------------ formatting (cents in, German out)
@@ -562,18 +562,18 @@ function renderTaxes() {
 }
 
 // ------------------------------------------------------------ news + watchlist
-const subjects = () => (S.data?.positions || []).map(p => ({ key: p.key, name: p.name, held: true }))
-  .concat(S.watch.map(w => ({ key: w.key, name: w.name, held: false })))
-  .filter((s, i, a) => a.findIndex(x => x.key === s.key) === i);
+const post = body => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 async function loadNews() {
   $('#newslist').innerHTML = '<li class="muted">Loading headlines…</li>';
   try {
-    const json = body => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    const [n, q] = await Promise.all([
-      api('/api/news', json({ subjects: subjects(), lang: S.lang })),
-      S.watch.length ? api('/api/quotes', json({ keys: S.watch.map(w => w.key) })) : {},
+    const [n, w] = await Promise.all([
+      S.preview
+        ? api('/api/news', post({ lang: S.lang, subjects: (S.data?.positions || []).map(p => ({ key: p.key, name: p.name, held: true })) }))
+        : api(`/api/news?lang=${S.lang}`),
+      api('/api/watchlist'),
     ]);
-    S.news = n; S.watchQuotes = q;
+    S.news = n; S.watch = w.items;
+    if (S.preview) S.news.subjects = n.subjects.concat(w.items.map(x => ({ key: x.key, name: x.name, held: false })));
     renderNews();
   } catch (e) { $('#newslist').innerHTML = `<li class="down">${esc(e.message)}</li>`; }
 }
@@ -581,27 +581,28 @@ function renderNews() {
   const n = S.news; if (!n) return;
   document.querySelectorAll('#lang button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === S.lang)));
   const held = new Map((S.data?.positions || []).map(p => [p.key, p]));
+  const watch = new Map(S.watch.map(w => [w.key, w]));
   const dayOf = k => {
     if (held.has(k)) return held.get(k).dayPct;
-    const q = S.watchQuotes?.[k];
+    const q = watch.get(k)?.quote;
     return q && !q.error && q.prev ? (q.last / q.prev - 1) * 100 : null;
   };
   const chip = s => `<button class="chip${s.held ? '' : ' watch'}" data-k="${esc(s.key)}" aria-pressed="${S.filter === s.key}">
       ${esc(s.name)} <span class="pct ${dir(dayOf(s.key))}">${dayOf(s.key) == null ? '' : `${arrow(dayOf(s.key))} ${pct(dayOf(s.key))}`}</span>
       ${s.held ? '' : `<span class="x" data-rm="${esc(s.key)}" title="Stop following">×</span>`}</button>`;
-  $('#chips').innerHTML = `<button class="chip" data-k="all" aria-pressed="${S.filter === 'all'}">All</button>` + subjects().map(chip).join('');
+  $('#chips').innerHTML = `<button class="chip" data-k="all" aria-pressed="${S.filter === 'all'}">All</button>` + n.subjects.map(chip).join('');
   const seen = new Set();
   const items = n.items.filter(i => (S.filter === 'all' ? !seen.has(i.link) && seen.add(i.link) : i.key === S.filter)).slice(0, 80);
   $('#newslist').innerHTML = (items.length ? items.map(i => `<li>
       <a href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a>
       <div class="m">${esc(i.source)} · ${ago(i.at)} · <span class="tag">${esc(i.name)}</span></div></li>`).join('')
-    : `<li class="muted">${subjects().length ? 'No headlines in the last 7 days.' : 'Nothing to follow yet - upload an export or follow a stock above.'}</li>`)
+    : `<li class="muted">${n.subjects.length ? 'No headlines in the last 7 days.' : 'Nothing to follow yet - upload an export or follow a stock above.'}</li>`)
     + (n.errors.length ? `<li class="down">${n.errors.map(esc).join('<br>')}</li>` : '');
-  document.querySelectorAll('#chips .chip').forEach(c => c.onclick = ev => {
+  document.querySelectorAll('#chips .chip').forEach(c => c.onclick = async ev => {
     const rm = ev.target.closest('[data-rm]');
     if (rm) {
       ev.stopPropagation();
-      S.watch = S.watch.filter(w => w.key !== rm.dataset.rm); save('tro.watch', S.watch);
+      await api(`/api/watchlist/${encodeURIComponent(rm.dataset.rm)}`, { method: 'DELETE' });
       if (S.filter === rm.dataset.rm) S.filter = 'all';
       return loadNews();
     }
@@ -616,9 +617,7 @@ $('#add').onsubmit = async ev => {
   const q = $('#addq').value.trim(); if (!q) return;
   const btn = ev.target.querySelector('button'); btn.disabled = true;
   try {
-    const item = await api(`/api/search?q=${encodeURIComponent(q)}`);
-    if (subjects().some(s => s.key === item.key)) throw new Error(`${item.name} is already on the list`);
-    S.watch.push({ key: item.key, name: item.name }); save('tro.watch', S.watch);
+    const item = await api('/api/watchlist', post({ query: q }));
     $('#addq').value = ''; S.filter = item.key;
     toast(`Following <b>${esc(item.name)}</b>`);
     await loadNews();
@@ -626,26 +625,19 @@ $('#add').onsubmit = async ev => {
   finally { btn.disabled = false; }
 };
 
-// ------------------------------------------------------------ upload (kept in this browser only)
+// ------------------------------------------------------------ upload (saved into data/ by the local server)
 async function upload(files) {
   files = [...files].filter(f => /\.csv$/i.test(f.name));
   if (!files.length) return toast('Only .csv files - Trade Republic: Statements → Transaction export');
-  const texts = await Promise.all(files.map(f => f.text().then(text => ({ name: f.name, text }))));
-  const before = S.data?.rowCount ?? 0;
-  for (const t of texts) S.files = S.files.filter(f => f.name !== t.name).concat(t);
-  await loadSummary();
-  const report = new Map((S.data?.files || []).map(f => [f.name, f]));
-  const bad = texts.filter(t => !report.get(t.name)?.ok);
-  if (bad.length) { S.files = S.files.filter(f => !bad.some(b => b.name === f.name)); }
-  const kept = save('tro.files', S.files);
-  if (bad.length && !S.files.length) renderEmpty();
-  else if (bad.length) await loadSummary();
-  const added = (S.data?.rowCount ?? 0) - before;
-  toast(texts.map(t => report.get(t.name)?.ok
-      ? `<b>${esc(t.name)}</b>: ${report.get(t.name).rows} rows`
-      : `<b>${esc(t.name)}</b>: <span class="down">${esc(report.get(t.name)?.reason || 'could not read it')}</span>`).join('<br>')
-    + (texts.length > bad.length ? `<br>${added > 0 ? `${added} new transactions` : 'nothing new'}` : '')
-    + (kept ? '' : '<br><span class="down">Too big to keep in this browser - it is used for this session only.</span>'), 9000);
+  try {
+    const texts = await Promise.all(files.map(async f => ({ name: f.name, text: await f.text() })));
+    const r = await api('/api/upload', post({ files: texts }));
+    toast(r.files.map(f => f.ok
+      ? `<b>${esc(f.file)}</b>: ${f.added ? `${f.added} new of ${f.rows} rows, saved as data/${esc(f.savedAs)}` : esc(f.note)}`
+      : `<b>${esc(f.file)}</b>: <span class="down">${esc(f.reason)}</span>`).join('<br>'), 9000);
+    S.preview = null; S.news = null;
+    await loadSummary();
+  } catch (e) { toast(`<span class="down">${esc(e.message)}</span>`); }
 }
 $('#file').onchange = e => { upload(e.target.files); e.target.value = ''; };
 let dragDepth = 0;
@@ -654,43 +646,40 @@ addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('
 addEventListener('dragover', e => e.preventDefault());
 addEventListener('drop', e => { e.preventDefault(); dragDepth = 0; $('#drop').classList.remove('on'); upload(e.dataTransfer.files); });
 $('#sample').onclick = async () => {
-  S.files = [{ name: 'sample.csv', text: await (await fetch('/sample.csv')).text() }];
-  save('tro.files', S.files);
+  S.preview = await (await fetch('/sample.csv')).text();
+  S.news = null;
   loadSummary();
-};
-$('#forget').onclick = () => {
-  for (const k of ['tro.files', 'tro.watch', 'tro.settings']) { try { localStorage.removeItem(k); } catch {} }
-  Object.assign(S, { data: null, news: null, files: [], watch: [], filter: 'all', settings: { joint: false, church: 0 } });
-  renderEmpty();
-  toast('Removed from this browser.');
 };
 
 // ------------------------------------------------------------ load
 function renderEmpty() {
   document.body.classList.add('empty');
-  $('#empty').hidden = false; $('#forget').hidden = !S.watch.length;
+  $('#empty').hidden = false;
   $('#banners').innerHTML = '';
   $('#meta').textContent = 'Trade Republic transaction export → today, months, taxes, news.';
 }
 function renderMeta() {
   const d = S.data;
   const quoted = d.positions.map(p => p.at).filter(Boolean).sort().pop();
-  const sample = S.files.length === 1 && S.files[0].name === 'sample.csv';
-  $('#meta').textContent = `${sample ? 'Sample data · ' : ''}Transactions up to ${day(d.asOf)} · prices ${quoted ? `at ${time(quoted)}` : 'unavailable'} · refreshes every 5 min`;
+  $('#meta').innerHTML = `${S.preview ? '<b>Sample data</b> (not saved) · <a href="#" id="endsample">back to my data</a> · ' : ''}`
+    + `Transactions up to ${esc(day(d.asOf))} · prices ${quoted ? `at ${esc(time(quoted))}` : 'unavailable'} · refreshes every 5 min`;
+  const end = $('#endsample');
+  if (end) end.onclick = ev => { ev.preventDefault(); S.preview = null; S.news = null; loadSummary(); };
   const stale = (Date.parse(d.today) - Date.parse(d.asOf)) / 864e5;
   const b = [];
-  if (stale > 10 && !sample) b.push(`<div class="banner"><b>The export ends ${day(d.asOf)}.</b> Anything bought, sold or paid in since is missing - upload a fresh transaction export.</div>`);
+  if (stale > 10 && !S.preview) b.push(`<div class="banner"><b>The export ends ${day(d.asOf)}.</b> Anything bought, sold or paid in since is missing - upload a fresh transaction export.</div>`);
   if (d.errors?.length) b.push(`<div class="banner">${d.errors.map(esc).join('<br>')}</div>`);
   $('#banners').innerHTML = b.join('');
 }
 async function loadSummary() {
-  if (!S.files.length) return renderEmpty();
   try {
-    S.data = await api('/api/summary', { method: 'POST', headers: { 'content-type': 'application/json' },
-                                         body: JSON.stringify({ files: S.files, settings: S.settings }) });
+    const q = `joint=${S.settings.joint ? 1 : 0}&church=${Number(S.settings.church) || 0}`;
+    S.data = S.preview
+      ? await api('/api/preview', post({ text: S.preview, settings: S.settings }))
+      : await api(`/api/summary?${q}`);
     if (S.data.empty) return renderEmpty();
     document.body.classList.remove('empty');
-    $('#empty').hidden = true; $('#forget').hidden = false;
+    $('#empty').hidden = true;
     renderMeta(); renderToday(); renderMonths(); renderTaxes();
     // holdings may have changed: news follows them
     if ($('#tab-news').classList.contains('on')) loadNews(); else S.news = null;
@@ -698,7 +687,7 @@ async function loadSummary() {
 }
 let resizeT;
 addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderMonths, 150); });
-setInterval(() => { if (document.visibilityState === 'visible' && S.files.length) loadSummary(); }, 5 * 60 * 1000);
+setInterval(() => { if (document.visibilityState === 'visible') loadSummary(); }, 5 * 60 * 1000);
 addEventListener('hashchange', () => showTab(location.hash.slice(1)));
 showTab(location.hash.slice(1));
 loadSummary();

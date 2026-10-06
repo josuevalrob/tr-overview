@@ -1,6 +1,9 @@
 node_modules/
 .DS_Store
 .env
-# your own exports never belong here - only the made-up sample does
+# your data: exports, followed stocks - never committed
+data/*
+!data/.gitkeep
+# no export belongs in git except the made-up sample
 *.csv
 !public/sample.csv

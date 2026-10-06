@@ -1,9 +1,9 @@
 {
   "name": "tr-overview",
   "version": "0.1.0",
-  "description": "Trade Republic depot overview from the transaction export: today, months, taxes, news.",
+  "description": "Trade Republic depot overview from the transaction export: today, months, taxes, news. Runs locally.",
   "type": "module",
-  "private": true,
+  "license": "MIT",
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node server.mjs",
