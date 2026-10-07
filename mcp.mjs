@@ -260,7 +260,7 @@ const TOOLS = [
     inputSchema: { type: 'object', required: ['stock'], properties: {
       stock: { type: 'string', description: 'Name, ISIN or US ticker.' },
       action: { type: 'string', enum: ['get', 'save', 'lines'], description: 'Default get.' },
-      metrics: { type: 'array', description: 'save: [{id: "gmv", label: "Shopee GMV", unit: "$bn"|"$m"|"bn"|"m"|"%", help: "what it is"}]',
+      metrics: { type: 'array', description: 'save: [{id: "gmv", label: "Shopee GMV", unit: "$bn"|"$m"|"bn"|"m"|"%", help: "what it is", earnings: true}] - earnings: true marks the company\'s own profit measure (Brookfield: distributable earnings, a REIT: FFO); the research read-out then shows a P/E on its last four quarters. One per company.',
                  items: { type: 'object' } },
       quarter: { type: 'object', description: 'save: {period: "2026-Q2", reported: "2026-08-11", source: "https://…", values: {gmv: 38.3, …}}' },
       lines: { type: 'object', description: 'lines: {metricId: {green, red}}. Judges the growth % of amounts and the level of rates (%). green above red = higher is better.' },

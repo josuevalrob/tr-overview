@@ -1569,7 +1569,7 @@ async function renderKpis() {
       <p class="sub" style="margin:0">From ${esc(t.company || d.name)}'s own quarterly results · latest ${esc(qLabel(t.latest.period))}${t.latest.reported ? `, reported ${esc(day(t.latest.reported))}` : ''}${t.latest.source ? ` · <a href="${esc(t.latest.source)}" target="_blank" rel="noopener noreferrer">source</a>` : ''}${t.due ? ' · <span class="down">newer results are out</span>' : ''}</p></div>
       <button class="btn" id="k-edit" type="button">Edit</button></div>
     <div class="scroll"><table class="kt"><thead><tr><th>Number</th>${t.last.map(p => `<th>${esc(qLabel(p))}</th>`).join('')}${lined ? '<th>Your line</th>' : ''}</tr></thead><tbody>
-      ${t.rows.map(r => `<tr><td>${esc(r.label)}${r.help ? `<span class="q" title="${esc(r.help)}">?</span>` : ''}</td>
+      ${t.rows.map(r => `<tr><td>${esc(r.label)}${r.earnings ? ' <span class="muted small" title="The company\'s own profit measure: the read-out shows a P/E on its last four quarters">· P/E</span>' : ''}${r.help ? `<span class="q" title="${esc(r.help)}">?</span>` : ''}</td>
         ${r.cells.map((c, i) => `<td>${i === r.cells.length - 1 && r.tone ? `<span class="dot" style="background:var(${TONE[r.tone]})"></span>` : ''}${esc(KX.fmt(c.value, r.unit))}
           <span class="small ${c.change == null ? '' : (r.unit === '%' ? '' : dir(c.change))}">${esc(KX.fmtChange(c.change, r.unit))}</span></td>`).join('')}
         ${lined ? `<td class="ln">${line(r)}</td>` : ''}</tr>`).join('')}
@@ -1656,18 +1656,20 @@ function renderKpiEdit(box, t) {
     <p class="sub">Numbers from ${esc(d.name)}'s own results release or filing, with its link. Amounts like 38,3 in the unit you pick; rates in %.</p>
     <div class="scroll"><table class="kt"><thead><tr><th>Number</th><th>Unit</th>${last.map(p => `<th>${esc(qLabel(p))}</th>`).join('')}
       <th><input id="k-p" placeholder="2026-Q3" title="New quarter"><input id="k-r" type="date" title="Reported on"><input id="k-s" class="w" placeholder="https://… source" title="Link to the results release"></th>
-      <th>Green at</th><th>Red at</th></tr></thead><tbody>
+      <th>Green at</th><th>Red at</th><th title="The company's own profit measure (Brookfield: distributable earnings, a REIT: FFO) - the read-out shows a P/E on its last four quarters">P/E on it</th></tr></thead><tbody>
       ${rows.map(r => `<tr data-id="${esc(r.id)}" data-unit="${esc(r.unit)}"><td>${esc(r.label)}</td><td>${esc(r.unit)}</td>
         ${r.cells.map(c => `<td><input data-p="${esc(c.period)}" value="${esc(v(c.value))}" inputmode="decimal"></td>`).join('')}
         <td><input data-new value="" inputmode="decimal"></td>
         <td><input data-g value="${esc(v(r.line?.green))}" inputmode="decimal" title="${r.unit === '%' ? 'level %' : 'growth % on a year before'}"></td>
-        <td><input data-r value="${esc(v(r.line?.red))}" inputmode="decimal" title="${r.unit === '%' ? 'level %' : 'growth % on a year before'}"></td></tr>`).join('')}
+        <td><input data-r value="${esc(v(r.line?.red))}" inputmode="decimal" title="${r.unit === '%' ? 'level %' : 'growth % on a year before'}"></td>
+        <td>${r.unit === '%' ? '' : `<input type="radio" name="k-earn" data-e${r.earnings ? ' checked' : ''} aria-label="P/E on ${esc(r.label)}">`}</td></tr>`).join('')}
       <tr data-add><td><input class="w" data-l placeholder="+ new number, e.g. Shopee GMV"></td>
         <td><select data-u><option>$bn</option><option>$m</option><option>bn</option><option>m</option><option>%</option></select></td>
-        ${last.map(() => '<td></td>').join('')}<td><input data-new value="" inputmode="decimal"></td><td></td><td></td></tr>
+        ${last.map(() => '<td></td>').join('')}<td><input data-new value="" inputmode="decimal"></td><td></td><td></td>
+        <td><input type="radio" name="k-earn" data-e aria-label="P/E on the new number"></td></tr>
     </tbody></table></div>
     <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" id="k-save" type="button">Save</button><button class="btn" id="k-cancel" type="button">Cancel</button></div>
-    <p class="note">A new quarter needs its period and reported date; values left empty stay empty. Lines need both numbers: green above red means higher is better (GMV growth), below means lower is (NPL).</p>`;
+    <p class="note">A new quarter needs its period and reported date; values left empty stay empty. Lines need both numbers: green above red means higher is better (GMV growth), below means lower is (NPL). "P/E on it": the company's own profit measure, if it has one - the read-out then shows the price over its last four quarters.</p>`;
   $('#k-cancel').onclick = () => { R.kedit = false; renderKpis(); };
   $('#k-save').onclick = async () => {
     // "38.3" and "38,3" both; with a comma, dots are thousands ("5.587,6")
@@ -1685,6 +1687,8 @@ function renderKpiEdit(box, t) {
           id = slug(label);
           file.metrics.push({ id, label, unit: tr.querySelector('[data-u]').value, help: '' });
         }
+        const me = file.metrics.find(x => x.id === id), e = tr.querySelector('[data-e]');
+        if (me) { if (e?.checked && me.unit !== '%') me.earnings = true; else delete me.earnings; }
         tr.querySelectorAll('input[data-p]').forEach(i => { q(i.dataset.p).values[id] = num(i.value); });
         const nv = tr.querySelector('input[data-new]').value;
         if (np && nv.trim() !== '') q(np).values[id] = num(nv);

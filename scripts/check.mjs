@@ -265,6 +265,14 @@ check('company numbers: change on a year before, as reported when given; lines j
   assert.equal(t.due, false);
   assert.equal(K.table(f, {}, { today: '2026-11-11', nextResults: '2026-11-10' }).due, true);
   assert.throws(() => K.clean({ metrics: [{ id: 'gmv', label: 'GMV', unit: '$bn' }], quarters: [{ period: '2026-2', values: {} }] }));
+  // the company's own profit measure: four quarters in a row, per share in euros
+  const de = K.clean({ company: 'B', metrics: [{ id: 'de', label: 'DE', unit: '$m', earnings: true }],
+    quarters: ['2025-Q3', '2025-Q4', '2026-Q1', '2026-Q2'].map((period, i) => ({ period, values: { de: [1487, 1587, 1550, 1548][i] } })) });
+  const own = K.ownMeasure(de, { shares: 2.452e9, fx: { USD: 1.1269 } });
+  assert.equal(own.perShare.toFixed(3), '2.234');                       // 6.172 m $ ÷ 1,1269 ÷ 2,452 bn shares
+  assert.equal(own.period, 'Q3 2025–Q2 2026');
+  assert.equal(K.ownMeasure({ ...de, quarters: de.quarters.filter(q => q.period !== '2025-Q4') }, { shares: 1, fx: { USD: 1 } }), null);
+  assert.throws(() => K.clean({ metrics: [{ id: 'a', label: 'A', unit: '$m', earnings: true }, { id: 'b', label: 'B', unit: '$m', earnings: true }] }));
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
