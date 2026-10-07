@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mergeExports, replay, holdings, taxYear, taxSettings, months, xirr, annualReturns } from '../lib/portfolio.mjs';
 import { stories, newsNames } from '../lib/news.mjs';
 import { readout, themes } from '../lib/research.mjs';
@@ -285,6 +286,11 @@ check('company numbers: change on a year before, as reported when given; lines j
   assert.equal(own.period, 'Q3 2025–Q2 2026');
   assert.equal(K.ownMeasure({ ...de, quarters: de.quarters.filter(q => q.period !== '2025-Q4') }, { shares: 1, fx: { USD: 1 } }), null);
   assert.throws(() => K.clean({ metrics: [{ id: 'a', label: 'A', unit: '$m', earnings: true }, { id: 'b', label: 'B', unit: '$m', earnings: true }] }));
+});
+
+check('the MCP server and the page script parse', () => {
+  // a stray quote in a tool description stops the MCP server from starting at all
+  for (const f of ['mcp.mjs', 'server.mjs']) execFileSync(process.execPath, ['--check', path.join(HERE, '..', f)], { stdio: 'pipe' });
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
