@@ -225,9 +225,11 @@ const TOOLS = [
       const seen = new Set(), story = new Map();
       for (const i of r.news.filter(i => !seen.has(i.link) && seen.add(i.link))) {
         const g = story.get(i.story);
-        if (g) g.outlets++;
-        else story.set(i.story, { title: i.title, source: i.source, at: i.at, link: i.link, outlets: 1, names_it: i.about });
+        if (g) g.from.add(i.source);
+        else story.set(i.story, { title: i.title, source: i.source, at: i.at, link: i.link, from: new Set([i.source]), names_it: i.about });
       }
+      // outlets: how many sites ran it - one site's 36 schedule pages are one outlet
+      for (const g of story.values()) { g.outlets = g.from.size; delete g.from; }
       const f = r.fit;
       return {
         name: r.name, key: r.key, isin: r.isin, sector: r.profile?.sector ?? null, country: r.profile?.country ?? null,
@@ -311,7 +313,7 @@ const TOOLS = [
       const seen = new Set(), story = new Map();
       for (const i of n.items.filter(i => !seen.has(i.link) && seen.add(i.link))) {
         const g = story.get(i.story);
-        if (g) g.alsoIn.push(i.source);
+        if (g) { if (i.source !== g.source && !g.alsoIn.includes(i.source)) g.alsoIn.push(i.source); }
         else story.set(i.story, { stock: i.name, title: i.title, source: i.source, at: i.at, link: i.link, alsoIn: [] });
       }
       return { headlines: [...story.values()].slice(0, Number(a.limit) || 20), errors: n.errors };

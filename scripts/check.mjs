@@ -9,8 +9,9 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mergeExports, replay, holdings, taxYear, taxSettings, months, xirr, annualReturns, homeCurrency, currencySplit } from '../lib/portfolio.mjs';
-import { stories, newsNames } from '../lib/news.mjs';
-import { readout, themes } from '../lib/research.mjs';
+import { stories, newsNames, otherNames } from '../lib/news.mjs';
+import { readout, themes, naming } from '../lib/research.mjs';
+import { dropSpikes } from '../lib/market.mjs';
 import * as K from '../lib/kpis.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -141,6 +142,37 @@ check('research: themes count stories that name the company, once per story', ()
   ];
   const t = Object.fromEntries(themes(n, ['Sea', 'SE']).map(x => [x.id, x.stories]));
   assert.deepEqual(t, { insider: 1, downgrade: 1 });
+});
+
+check('research: a beat or a miss is one against the numbers, not a game', () => {
+  const n = [
+    { title: "Boys soccer: L-Cats lose high-scoring game to Brookfield Academy, beat St. John's", source: 'A', story: 1, link: 'a' },
+    { title: 'Brookfield beats Q3 estimates as inflows hit a record', source: 'B', story: 2, link: 'b' },
+    { title: 'Brookfield shares slide after earnings miss', source: 'C', story: 3, link: 'c' },
+    { title: "Don't miss Brookfield's investor day", source: 'D', story: 4, link: 'd' },
+  ];
+  const t = Object.fromEntries(themes(n, ['Brookfield']).map(x => [x.id, x.stories]));
+  assert.deepEqual(t, { beat: 1, miss: 1 });
+});
+
+check('news: a sister company is not the company - "Brookfield Renewable" is not Brookfield, "ASML Holding" is ASML', () => {
+  const hits = ['Brookfield', 'Brookfield Renewable', 'Brookfield Asset Management', 'Brookfield Corporation', 'Brookfield Renewable Partners']
+    .map(name => ({ name, type: 'STOCK' }));
+  const others = otherNames('Brookfield', hits);
+  assert.deepEqual(others, ['Brookfield Renewable', 'Brookfield Asset Management', 'Brookfield Renewable Partners']);
+  assert.deepEqual(otherNames('ASML (ADR)', [{ name: 'ASML Holding', type: 'STOCK' }]), []);
+  const about = naming(['Brookfield', 'BN'], others);
+  assert.equal(about('Brookfield Renewable Partners (NYSE:BEP) Given a $38.00 Price Target'), false);
+  assert.equal(about('Brookfield Asset Management (TSX:BAM) Stock Looks Fully Priced'), false);
+  assert.equal(about('Brookfield commits $444 million to ESR India warehouse parks deal'), true);
+  assert.equal(about('Brookfield (NYSE:BN) and Brookfield Renewable sign AI power deal'), true);
+});
+
+check('prices: a stray close never adjusted for a split is left out, a real jump stays', () => {
+  const s = [['2025-10-08', 38.67], ['2025-10-09', 38.67], ['2025-10-10', 58], ['2025-10-15', 39], ['2025-10-16', 37.2]];
+  assert.deepEqual(dropSpikes(s).map(([d]) => d), ['2025-10-08', '2025-10-09', '2025-10-15', '2025-10-16']);
+  const jump = [['a', 10], ['b', 14], ['c', 14.2], ['d', 14.1]];   // up 40 % and stays: a price, not a print
+  assert.equal(dropSpikes(jump).length, 4);
 });
 
 check('research: buying moves weight and country mix, rules colour the points', () => {
