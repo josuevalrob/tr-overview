@@ -13,6 +13,7 @@
     --s1:#2a78d6; --s2:#eb6834; --pos:#2a78d6; --neg:#e34948;
     --up:#006300; --down:#d03b3b; --critical:#d03b3b; --good:#0ca30c;
     --track:#cde2fb; --proj:#86b6ef; --wash:rgba(42,120,214,.08);
+    --c3:#1baf7a; --c4:#eda100; --c5:#e87ba4; --c6:#008300; --other:#a3a29c;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
@@ -22,6 +23,7 @@
       --s1:#3987e5; --s2:#d95926; --pos:#3987e5; --neg:#e66767;
       --up:#0ca30c; --down:#e66767; --critical:#d03b3b; --good:#0ca30c;
       --track:#0d366b; --proj:#1c5cab; --wash:rgba(57,135,229,.12);
+      --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300; --other:#6b6a65;
     }
   }
   :root[data-theme="dark"]{
@@ -31,6 +33,7 @@
     --s1:#3987e5; --s2:#d95926; --pos:#3987e5; --neg:#e66767;
     --up:#0ca30c; --down:#e66767; --critical:#d03b3b; --good:#0ca30c;
     --track:#0d366b; --proj:#1c5cab; --wash:rgba(57,135,229,.12);
+    --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300; --other:#6b6a65;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--page);color:var(--ink);
@@ -130,6 +133,33 @@
   .news a:hover{text-decoration:underline}
   .news .m{font-size:12px;color:var(--muted);margin-top:2px}
   .news .tag{color:var(--ink2)}
+  .news .also summary{font-size:12px;color:var(--muted);cursor:pointer;margin-top:4px;width:max-content}
+  .news .also summary:hover{color:var(--ink2)}
+  .news .also ul{list-style:none;margin:4px 0 0;padding:0 0 0 12px;border-left:2px solid var(--line)}
+  .news .also li{padding:3px 0;border:0;font-size:13px}
+  .news .also a{font-weight:400}
+  .mix{--cols:minmax(96px,170px) minmax(90px,1fr) 64px 56px 76px 84px;font-size:13px}
+  .mix .r{display:grid;grid-template-columns:var(--cols);column-gap:12px;align-items:center;width:100%;
+          font:inherit;color:inherit;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);
+          padding:7px 6px;cursor:pointer;border-radius:6px}
+  .mix .r:last-child{border-bottom:0}
+  .mix .r:hover{background:var(--wash)}
+  .mix .r[aria-pressed="true"]{background:var(--wash);box-shadow:inset 3px 0 0 var(--s1)}
+  .mix .h{cursor:default;font-size:12px;color:var(--ink2);padding-top:0}
+  .mix .h:hover{background:none}
+  .mix .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+  .mix .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .mix .share{display:flex;align-items:center;gap:8px}
+  .mix .share .t{flex:1;height:10px;border-left:1px solid var(--axis)}
+  .mix .share .f{display:block;height:100%;background:var(--s1);border-radius:0 4px 4px 0;min-width:2px}
+  .mix .share .v{width:38px;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .mix svg{display:block}
+  .mix svg rect{fill:var(--s1)}
+  .mix svg rect.z{fill:var(--grid)}
+  @media (max-width:640px){
+    .mix{--cols:minmax(80px,120px) minmax(80px,1fr) 48px 44px}
+    .mix .td,.mix .pd{display:none}
+  }
   .muted{color:var(--muted)}
   #drop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:20;
         background:rgba(13,13,13,.55);color:#fff;font-size:18px;font-weight:600}
@@ -148,6 +178,13 @@
   .alloc .bar{height:14px;border-radius:0 4px 4px 0;background:var(--s1);min-width:2px}
   .alloc .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   .alloc .num small{color:var(--muted);margin-left:8px}
+  .pie{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+  .pie svg{width:180px;height:180px;flex:none}
+  .pie svg text{font:600 15px system-ui,-apple-system,"Segoe UI",sans-serif;fill:var(--ink)}
+  .pie svg text.k{font-weight:400;font-size:11.5px;fill:var(--ink2)}
+  .pie .alloc{flex:1;min-width:200px;grid-template-columns:10px minmax(0,1fr) auto}
+  .pie .sw{width:10px;height:10px;border-radius:3px}
+  .ctrls{display:flex;gap:8px;flex-wrap:wrap}
   .contrib{display:grid;grid-template-columns:minmax(90px,170px) 1fr auto;gap:8px 12px;align-items:center;font-size:13px}
   .contrib .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
   .contrib .lbl small{display:block;color:var(--muted);font-size:11.5px;line-height:1.2}
@@ -193,6 +230,77 @@
   #side table{font-size:12.5px}
   #side .seg{margin:0 6px 8px 0}
   @media (max-width:600px){ .hero .v{font-size:40px} }
+  .slide{position:relative;padding:18px 0 0;margin:4px 0 14px}
+  .slide input{-webkit-appearance:none;appearance:none;display:block;width:100%;height:8px;margin:8px 0;border-radius:4px;
+               background:var(--track);cursor:pointer}
+  .slide input::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;
+               background:var(--raised);border:2px solid var(--s1);box-shadow:0 1px 5px rgba(0,0,0,.35);cursor:grab}
+  .slide input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--raised);border:2px solid var(--s1);
+               box-shadow:0 1px 5px rgba(0,0,0,.35);cursor:grab}
+  .slide input:active::-webkit-slider-thumb{cursor:grabbing}
+  .slide input:focus-visible{outline:2px solid var(--s1);outline-offset:6px}
+  .slide .mark{position:absolute;top:0;font-size:11.5px;color:var(--critical);white-space:nowrap;transform:translateX(-50%);pointer-events:none}
+  .slide .tick{position:absolute;top:18px;width:2px;height:24px;background:var(--critical);transform:translateX(-50%);pointer-events:none}
+  .slide-l{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)}
+  .kt td,.kt th{vertical-align:top}
+  .kt td:first-child{white-space:normal;min-width:150px}
+  .kt .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+  .kt .q{color:var(--muted);cursor:help;font-size:12px;margin-left:4px}
+  .kt .ln{color:var(--ink2);font-size:12px}
+  .kt input,.kt select{font:inherit;font-size:12.5px;padding:4px 6px;border-radius:6px;border:1px solid var(--line);
+                       background:var(--raised);color:var(--ink);width:78px;text-align:right}
+  .kt input.w{width:150px;text-align:left}
+  .kt th input{display:block;margin:0 0 4px auto;text-align:left}
+  .badge{display:inline-block;font-size:12px;font-weight:600;color:var(--critical);border:1px solid var(--critical);border-radius:999px;padding:0 8px;margin-left:6px}
+  .amtv{font-size:26px;font-weight:600;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .ro{list-style:none;margin:6px 0 0;padding:0}
+  .ro li{display:grid;grid-template-columns:10px 112px 1fr 16px;gap:10px;align-items:baseline;padding:9px 0;
+         border-bottom:1px solid var(--line);font-size:13.5px}
+  .ro li:last-child{border-bottom:0}
+  .ro .dot{width:10px;height:10px;border-radius:50%;align-self:center}
+  .ro .t{font-weight:600}
+  .ro .q{color:var(--muted);cursor:help;font-size:12px;text-align:center}
+  @media (max-width:600px){ .ro li{grid-template-columns:10px 1fr 16px} .ro .t{grid-column:2} .ro .x{grid-column:2} }
+  /* read-out in groups: one headline per row, the sentence and checks open on click */
+  .ro-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px;margin-top:10px}
+  .ro-sec{border:1px solid var(--line);border-radius:10px;padding:2px 14px 4px}
+  .ro-sec h4{display:flex;justify-content:space-between;align-items:baseline;margin:10px 0 4px;font-size:11.5px;
+             text-transform:uppercase;letter-spacing:.05em;color:var(--ink2)}
+  .ro-sec h4 .sc{text-transform:none;letter-spacing:0;font-weight:500;color:var(--muted)}
+  .ro-sec h4 .sc b{font-weight:600}
+  .ro-row{border-top:1px solid var(--line);font-size:13.5px}
+  .ro-row>summary,.ro-row>.s{display:grid;grid-template-columns:10px 118px 1fr 14px;gap:10px;align-items:center;padding:8px 0;list-style:none}
+  .ro-row>summary{cursor:pointer}
+  .ro-row>summary::-webkit-details-marker{display:none}
+  .ro-row .dot{width:10px;height:10px;border-radius:50%}
+  .ro-row .t{font-weight:600}
+  .ro-row .h{font-variant-numeric:tabular-nums}
+  .ro-row>summary .h::after{content:' ›';color:var(--muted)}
+  .ro-row[open]>summary .h::after{content:' ⌄'}
+  .ro-row .q{color:var(--muted);cursor:help;font-size:12px;text-align:center}
+  .ro-row .x{margin:0;padding:0 0 10px 138px;color:var(--ink2);font-size:13px;line-height:1.5}
+  .ro-row .chk{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 10px 138px}
+  /* company numbers over time: one small chart per number, each on its own scale */
+  .kc{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:16px 20px;margin-top:6px}
+  .kc-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;margin-bottom:4px}
+  .kc-h .l{color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .kc-h .v{font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .kc-h .v small{font-weight:400;font-size:11.5px;margin-left:4px;color:var(--muted)}
+  .kc-h .v small.up{color:var(--up)} .kc-h .v small.down{color:var(--down)}
+  .chk span{font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+  .chk .ok{color:var(--good);border-color:color-mix(in srgb,var(--good) 40%,transparent)}
+  .chk .no{color:var(--critical);border-color:color-mix(in srgb,var(--critical) 40%,transparent)}
+  .chk .na{color:var(--muted)}
+  @media (max-width:600px){ .ro-grid{grid-template-columns:1fr}
+    .ro-row>summary,.ro-row>.s{grid-template-columns:10px 1fr 14px} .ro-row .t{grid-column:2} .ro-row .h{grid-column:2}
+    .ro-row .x,.ro-row .chk{padding-left:20px} }
+  .cmp{display:grid;grid-template-columns:minmax(80px,130px) 1fr auto;gap:6px 12px;align-items:center;font-size:13px}
+  .cmp .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cmp .bars{display:grid;gap:2px}
+  .cmp .bars i{display:block;height:7px;border-radius:0 3px 3px 0;min-width:1px}
+  .cmp .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink2)}
+  .cmp .num b{color:var(--ink);font-weight:600}
+  .rhead{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start;justify-content:space-between}
 </style>
 </head>
 <body>
@@ -209,6 +317,7 @@
       <button role="tab" data-tab="months">Months</button>
       <button role="tab" data-tab="taxes">Taxes</button>
       <button role="tab" data-tab="news">News</button>
+      <button role="tab" data-tab="research">Research</button>
     </nav>
   </header>
   <main>
@@ -231,7 +340,9 @@
     <section class="tab" id="tab-months"></section>
     <section class="tab" id="tab-taxes"></section>
     <section class="tab" id="tab-news">
-      <div class="card">
+      <div class="card" id="newsmix" hidden></div>
+      <div class="card" id="bigstories" hidden></div>
+      <div class="card" id="newsfeed">
         <div class="row">
           <form class="add" id="add">
             <input id="addq" placeholder="Follow another stock: name or ISIN" autocomplete="off">
@@ -244,6 +355,18 @@
         <div class="chips" id="chips"></div>
         <ul class="news" id="newslist"><li class="muted">Loading headlines…</li></ul>
       </div>
+    </section>
+    <section class="tab" id="tab-research">
+      <div class="card">
+        <div class="row">
+          <form class="add" id="r-add">
+            <input id="r-q" placeholder="Research a stock: name, ISIN or US ticker (SE)" autocomplete="off">
+            <button class="btn" type="submit">Research</button>
+          </form>
+        </div>
+        <div class="chips" id="r-chips" style="margin:0"></div>
+      </div>
+      <div id="r-body"></div>
     </section>
   </main>
 </div>
@@ -303,12 +426,13 @@ function toast(html, ms = 6000) {
 
 // ------------------------------------------------------------ tabs
 function showTab(name) {
-  if (!['today', 'months', 'taxes', 'news'].includes(name)) name = 'today';
+  if (!['today', 'months', 'taxes', 'news', 'research'].includes(name)) name = 'today';
   document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('on', s.id === `tab-${name}`));
   if (history.replaceState) history.replaceState(null, '', `#${name}`);
   if (name === 'months') renderMonths();               // charts need a measured width
   if (name === 'news' && !S.news) loadNews();
+  if (name === 'research') loadResearch();
 }
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
@@ -480,8 +604,9 @@ function renderToday() {
       </div>
       <div class="card">
         <div class="row"><div><h2>Allocation</h2><p class="sub" style="margin:0" id="alloc-note"></p></div>
-          <div class="seg" id="alloc-by"><button data-a="position">Position</button><button data-a="sector">Sector</button><button data-a="country">Country</button></div></div>
-        <div class="alloc" id="alloc"></div>
+          <div class="ctrls"><div class="seg" id="alloc-by"><button data-a="position">Position</button><button data-a="sector">Sector</button><button data-a="country">Country</button></div>
+            <div class="seg" id="alloc-view"><button data-v="bars">Bars</button><button data-v="pie">Pie</button></div></div></div>
+        <div id="alloc"></div>
       </div>
     </div>`);
   el.querySelectorAll('tr[data-key]').forEach(tr => tr.onclick = () => openAnalysis(tr.dataset.key));
@@ -498,6 +623,12 @@ function renderMonths() {
   if (!d || d.empty || !el.classList.contains('on')) return;
   const ms = d.months, labels = ms.map(m => m.month), all = S.mode === 'all';
   const tipTitle = i => `${monLong(labels[i])}${ms[i].partial ? ' (so far)' : ''}`;
+  // per year, counting when each euro went in - the number to hold against inflation
+  const yr = d.annual?.[all ? 'all' : 'stocks'];
+  const yearHead = !yr?.since ? '' : `<div class="range-head">${yr.pct == null
+    ? '<span class="muted">Return per year shows once there is a full year of data.</span>'
+    : `<span class="v ${dir(yr.pct)}">${pct(yr.pct)} per year</span>
+       <span class="muted">since ${day(yr.since)} · counts how long each euro was in${all ? ', cash and interest included' : ', price moves only'}</span>`}</div>`;
   el.innerHTML = `
     <div class="card">
       <div class="row">
@@ -505,6 +636,7 @@ function renderMonths() {
           <p class="sub" style="margin:0">${all ? 'Total value minus the money you paid in: interest, dividends and price moves, after tax and fees.' : 'Market value against what you paid. The gap is the gain not yet sold.'}</p></div>
         <div class="seg" id="mode"><button data-m="all">Everything</button><button data-m="stocks">Stocks only</button></div>
       </div>
+      ${yearHead}
       ${all ? '' : '<div class="legend"><span><i style="background:var(--s1)"></i>Market value</span><span><i style="background:var(--s2)"></i>Paid for them</span></div>'}
       <div class="chart" id="c-line"></div>
     </div>
@@ -673,7 +805,7 @@ async function openAnalysis(key) {
                                       api(`/api/history/${encodeURIComponent(key)}`).catch(() => null)]);
     if (A.key !== key) return;                      // another one was opened meanwhile
     A.data = d; A.hist = h;
-    if (A.period === 'quarterly' && !d.us?.quarterly) A.period = 'annual';
+    if (!d.us?.[A.period === 'years' ? 'years' : 'quarterly'] && A.period !== 'annual') A.period = 'annual';
     renderAnalysis();
   } catch (e) { if (A.key === key) el.innerHTML += `<p class="down">${esc(e.message)}</p>`; }
 }
@@ -719,23 +851,25 @@ function renderAnalysis() {
       ${lastDiv ? `<span>Last ex-dividend</span><span>${day(lastDiv.exDate)} · ${money(lastDiv.amount, 'USD')}</span>` : ''}
     </div></div>` : '';
 
-  // financials: annual (onvista, EUR, with estimates) or quarterly (Nasdaq, USD)
-  const quarterly = A.period === 'quarterly' && us?.quarterly;
+  // financials: annual (onvista, EUR, with estimates), or as reported to the SEC per year / quarter (Nasdaq, USD) -
+  // onvista can lag: Sea Limited ends in 2023 there
+  const usRows = (A.period === 'quarterly' && us?.quarterly) || (A.period === 'years' && us?.years) || null;
+  const quarterly = !!usRows, cut = A.period === 'years' ? 4 : 7;
   const metrics = quarterly ? [['revenue', 'Revenue'], ['ebit', 'EBIT'], ['netIncome', 'Net income']]
                             : [['revenue', 'Revenue'], ['ebitda', 'EBITDA'], ['netIncome', 'Net income']];
   if (!metrics.some(([k]) => k === A.metric)) A.metric = 'revenue';
-  const rowsF = quarterly ? us.quarterly.map(q => ({ label: q.period.slice(0, 7), ...q }))
+  const rowsF = quarterly ? usRows.map(q => ({ label: q.period.slice(0, cut), ...q }))
                           : d.annual.filter(r => !r.estimate);
   const cur = quarterly ? 'USD' : 'EUR';
-  const fin = d.annual.length || us?.quarterly ? `<div class="sec"><h3>Financials</h3>
-      <div>${us?.quarterly ? `<div class="seg" id="a-period"><button data-p="annual" aria-pressed="${!quarterly}">Annual</button><button data-p="quarterly" aria-pressed="${!!quarterly}">Quarterly</button></div>` : ''}
+  const fin = d.annual.length || us?.quarterly || us?.years ? `<div class="sec"><h3>Financials</h3>
+      <div>${us?.quarterly || us?.years ? `<div class="seg" id="a-period"><button data-p="annual" aria-pressed="${!quarterly}">Annual €</button>${us.years ? `<button data-p="years" aria-pressed="${A.period === 'years'}">Reported $</button>` : ''}${us.quarterly ? `<button data-p="quarterly" aria-pressed="${A.period === 'quarterly'}">Quarterly</button>` : ''}</div>` : ''}
       <div class="seg" id="a-metric">${metrics.map(([k, l]) => `<button data-m="${k}" aria-pressed="${A.metric === k}">${l}</button>`).join('')}</div></div>
       <div class="chart" id="a-chart"></div>
-      <div class="scroll"><table><thead><tr><th>${quarterly ? 'Quarter' : 'Year'}</th><th>Revenue</th><th>${quarterly ? 'EBIT' : 'EBITDA'}</th><th>Net income</th>${quarterly ? '' : '<th>EPS</th>'}</tr></thead>
-        <tbody>${(quarterly ? us.quarterly.map(q => ({ ...q, label: q.period.slice(0, 7) })) : d.annual).slice().reverse().map(r => `<tr>
+      <div class="scroll"><table><thead><tr><th>${A.period === 'quarterly' ? 'Quarter' : 'Year'}</th><th>Revenue</th><th>${quarterly ? 'EBIT' : 'EBITDA'}</th><th>Net income</th>${quarterly ? '' : '<th>EPS</th>'}</tr></thead>
+        <tbody>${(quarterly ? usRows.map(q => ({ ...q, label: q.period.slice(0, cut) })) : d.annual).slice().reverse().map(r => `<tr>
           <td>${esc(r.label)}${r.estimate ? ' <span class="muted">est.</span>' : ''}</td><td>${big(r.revenue, cur)}</td><td>${big(quarterly ? r.ebit : r.ebitda, cur)}</td>
           <td class="${dir(r.netIncome)}">${big(r.netIncome, cur)}</td>${quarterly ? '' : `<td>${r.eps == null ? '–' : nf(2, 2).format(r.eps)}</td>`}</tr>`).join('')}</tbody></table></div>
-      <p class="note">${quarterly ? 'Last quarters as reported, USD (Nasdaq).' : 'EUR (onvista). Revenue = EBITDA ÷ EBITDA margin; net income = revenue × net margin. Estimates (est.) only cover EPS and dividends.'}</p></div>` : '';
+      <p class="note">${quarterly ? `${A.period === 'years' ? 'Fiscal years' : 'Last quarters'} as reported, USD (Nasdaq).` : 'EUR (onvista). Revenue = EBITDA ÷ EBITDA margin; net income = revenue × net margin. Estimates (est.) only cover EPS and dividends.'}</p></div>` : '';
 
   const divYears = d.annual.filter(r => r.dps);
   const dividends = divYears.length || us?.dividends?.length ? `<div class="sec"><h3>Dividends</h3>
@@ -887,7 +1021,8 @@ const rangeStart = (key, today) => {
 const rangeSeg = (id, keys, cur) => `<div class="seg" id="${id}">${keys.map(k => `<button data-r="${k}" aria-pressed="${k === cur}">${k}</button>`).join('')}</div>`;
 
 // ------------------------------------------------------------ depot over time + allocation (Today)
-const D = { range: store.get('tro.drange', '1M'), alloc: store.get('tro.alloc', 'position') };
+const D = { range: store.get('tro.drange', '1M'), alloc: store.get('tro.alloc', 'position'),
+            allocView: store.get('tro.allocview', 'bars') };
 
 function renderDepotChart() {
   const d = S.data, host = $('#c-depot');
@@ -1000,6 +1135,12 @@ function renderContrib() {
   host.querySelectorAll('.lbl[data-key]').forEach(l => l.onclick = () => openAnalysis(l.dataset.key));
 }
 
+/**
+ * Share of stocks + crypto by position, sector or country - as bars, or as a donut for the
+ * part-to-whole at a glance. A donut holds six slices at most: past that the smallest fold
+ * into "Other". Colours go by size, in the palette's fixed order.
+ */
+const PIE_MAX = 6;
 function renderAllocation() {
   const d = S.data, host = $('#alloc');
   if (!host) return;
@@ -1011,15 +1152,48 @@ function renderAllocation() {
     groups.set(k, (groups.get(k) || 0) + p.value);
   }
   const list = [...groups].sort((a, b) => b[1] - a[1]), top = list[0]?.[1] || 1;
-  host.innerHTML = list.map(([k, v]) => `<span class="lbl" title="${esc(k)}">${esc(k)}</span>
-    <span><span class="bar" style="display:block;width:${(v / top) * 100}%"></span></span>
-    <span class="num">${N0.format(v / total * 100)} %<small>${eur0(v)}</small></span>`).join('');
+  const share = v => `${N0.format(v / total * 100)} %`;
+  if (D.allocView === 'pie') {
+    const rest = list.slice(PIE_MAX - 1);
+    const slices = (list.length > PIE_MAX ? [...list.slice(0, PIE_MAX - 1), [`Other (${rest.length})`, rest.reduce((s, x) => s + x[1], 0)]] : list)
+      .map(([k, v], i) => ({ k, v, color: list.length > PIE_MAX && i === PIE_MAX - 1 ? 'var(--other)' : `var(--${i < 2 ? `s${i + 1}` : `c${i + 1}`})` }));
+    const R = 88, r = 56, c = 90, at = (rad, a) => `${(c + rad * Math.sin(a)).toFixed(2)},${(c - rad * Math.cos(a)).toFixed(2)}`;
+    let a0 = 0;
+    const arcs = slices.map((x, i) => {
+      const a1 = a0 + (x.v / total) * 2 * Math.PI, big = a1 - a0 > Math.PI ? 1 : 0;
+      const path = slices.length === 1                       // a full ring has no arc endpoints
+        ? `M${c},${c - R}A${R},${R} 0 1 1 ${c},${c + R}A${R},${R} 0 1 1 ${c},${c - R}M${c},${c - r}A${r},${r} 0 1 0 ${c},${c + r}A${r},${r} 0 1 0 ${c},${c - r}Z`
+        : `M${at(R, a0)}A${R},${R} 0 ${big} 1 ${at(R, a1)}L${at(r, a1)}A${r},${r} 0 ${big} 0 ${at(r, a0)}Z`;
+      a0 = a1;
+      return `<path data-i="${i}" d="${path}" fill="${x.color}" fill-rule="evenodd" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round"/>`;
+    }).join('');
+    host.innerHTML = `<div class="pie">
+      <svg viewBox="0 0 180 180" role="img" aria-label="${esc(slices.map(x => `${x.k} ${share(x.v)}`).join(', '))}">${arcs}
+        <text x="${c}" y="${c - 2}" text-anchor="middle">${eur0(total)}</text>
+        <text class="k" x="${c}" y="${c + 15}" text-anchor="middle">stocks + crypto</text></svg>
+      <div class="alloc">${slices.map(x => `<span class="sw" style="background:${x.color}"></span>
+        <span class="lbl" title="${esc(x.k)}">${esc(x.k)}</span>
+        <span class="num">${share(x.v)}<small>${eur0(x.v)}</small></span>`).join('')}</div></div>`;
+    host.querySelectorAll('path[data-i]').forEach(el => {
+      const x = slices[el.dataset.i];
+      el.onpointermove = ev => showTip(ev, `<div class="t">${esc(x.k)}</div>` + tipRow('Share', share(x.v), x.color) + tipRow('Value', eur(x.v)));
+      el.onpointerleave = hideTip;
+    });
+  } else {
+    host.innerHTML = `<div class="alloc">${list.map(([k, v]) => `<span class="lbl" title="${esc(k)}">${esc(k)}</span>
+      <span><span class="bar" style="display:block;width:${(v / top) * 100}%"></span></span>
+      <span class="num">${share(v)}<small>${eur0(v)}</small></span>`).join('')}</div>`;
+  }
   const biggest = list[0];
   $('#alloc-note').textContent = biggest && biggest[1] / total > 0.4
-    ? `${biggest[0]} is ${N0.format(biggest[1] / total * 100)} % of your stocks + crypto.` : '';
+    ? `${biggest[0]} is ${share(biggest[1])} of your stocks + crypto.` : '';
   document.querySelectorAll('#alloc-by button').forEach(btn => {
     btn.setAttribute('aria-pressed', String(btn.dataset.a === D.alloc));
     btn.onclick = () => { D.alloc = btn.dataset.a; store.set('tro.alloc', D.alloc); renderAllocation(); };
+  });
+  document.querySelectorAll('#alloc-view button').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.v === D.allocView));
+    btn.onclick = () => { D.allocView = btn.dataset.v; store.set('tro.allocview', D.allocView); renderAllocation(); };
   });
 }
 
@@ -1039,6 +1213,73 @@ async function loadNews() {
     renderNews();
   } catch (e) { $('#newslist').innerHTML = `<li class="down">${esc(e.message)}</li>`; }
 }
+// share of headlines per stock, its stories, today's move and a 7-day count; click a row to read that stock
+const berlinDay = t => new Date(t).toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
+function renderMix(n, dayOf) {
+  const box = $('#newsmix'), big = $('#bigstories');
+  box.hidden = big.hidden = !n.items.length;
+  if (!n.items.length) return;
+  const today = berlinDay(Date.now());
+  const days = [...Array(7)].map((_, k) => new Date(Date.parse(today + 'T12:00:00Z') - (6 - k) * 864e5).toISOString().slice(0, 10));
+  const rows = n.subjects.map(s => {
+    const mine = n.items.filter(i => i.key === s.key);
+    for (const i of mine) i.day ??= berlinDay(i.at);
+    const per = days.map(d => mine.filter(i => i.day === d).length);
+    return { ...s, count: mine.length, stories: new Set(mine.map(i => i.story ?? i.link)).size,
+             outlets: new Set(mine.map(i => i.source)).size, per, day: dayOf(s.key) };
+  }).sort((a, b) => b.count - a.count || b.stories - a.stories || a.name.localeCompare(b.name));
+  const total = rows.reduce((t, r) => t + r.count, 0) || 1, top = Math.max(1, rows[0].count);
+  const share = r => r.count && r.count / total < 0.005 ? '<1 %' : `${N0.format(r.count / total * 100)} %`;
+  const count = r => `${r.count}${r.full ? '+' : ''}`;
+  const wd = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const spark = r => {
+    const hi = Math.max(1, ...r.per);
+    return `<svg width="84" height="22" viewBox="0 0 84 22" aria-hidden="true">${r.per.map((v, k) => {
+      const h = v ? Math.max(2, v / hi * 22) : 1;
+      return `<rect class="${v ? '' : 'z'}" x="${k * 12}" y="${22 - h}" width="9" height="${h}" rx="${v ? 2 : 0}"/>`;
+    }).join('')}</svg>`;
+  };
+  const seen = new Set(), all = n.items.filter(i => !seen.has(i.link) && seen.add(i.link));
+  box.innerHTML = `<h2>Who's in the news</h2>
+    <p class="sub">Last 7 days · ${all.length} headlines · ${new Set(all.map(i => i.story ?? i.link)).size} stories · ${new Set(all.map(i => i.source)).size} outlets. Click a stock to read its news.</p>
+    <div class="mix" role="table" aria-label="Headlines per stock">
+      <div class="r h" role="row"><span role="columnheader">Stock</span><span role="columnheader">Share of headlines</span>
+        <span class="num" role="columnheader">Headlines</span><span class="num" role="columnheader">Stories</span>
+        <span class="num td" role="columnheader">Today</span><span class="num pd" role="columnheader">Per day</span></div>
+      ${rows.map(r => `<button class="r" role="row" type="button" data-k="${esc(r.key)}" aria-pressed="${S.filter === r.key}">
+        <span class="n" role="cell">${esc(r.name)}</span>
+        <span class="share" role="cell"><span class="t"><span class="f" style="width:${r.count ? r.count / top * 100 : 0}%"></span></span><span class="v">${share(r)}</span></span>
+        <span class="num" role="cell">${count(r)}</span>
+        <span class="num" role="cell">${r.stories}</span>
+        <span class="num td ${dir(r.day)}" role="cell">${r.day == null ? '–' : `${arrow(r.day)} ${pct(r.day)}`}</span>
+        <span class="num pd" role="cell">${spark(r)}</span></button>`).join('')}
+    </div>
+    ${rows.some(r => r.full) ? `<p class="note">Google News lists at most 100 headlines per stock and day: "+" means that cap was hit on some day, so the real count and share are higher.</p>` : ''}`;
+  box.querySelectorAll('.r[data-k]').forEach(b => {
+    const r = rows.find(x => x.key === b.dataset.k);
+    const busy = r.per.indexOf(Math.max(...r.per));
+    b.onclick = () => {
+      hideTip();
+      S.filter = S.filter === r.key ? 'all' : r.key; renderNews();
+      if (S.filter !== 'all') $('#newsfeed').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    b.onpointermove = ev => showTip(ev, `<div class="t">${esc(r.name)}</div>`
+      + tipRow('Headlines', count(r)) + tipRow('Share', share(r)) + tipRow('Stories', r.stories) + tipRow('Outlets', r.outlets)
+      + (r.count ? tipRow('Busiest day', `${wd(days[busy])} · ${r.per[busy]}`) : ''));
+    b.onpointerleave = hideTip;
+  });
+
+  // the stories most outlets ran, any stock
+  const story = new Map();
+  for (const i of all) { const k = i.story ?? i.link; (story.get(k) || story.set(k, []).get(k)).push(i); }
+  const most = [...story.values()].map(g => ({ g, outlets: new Set(g.map(i => i.source)).size }))
+    .filter(x => x.outlets > 1).sort((a, b) => b.outlets - a.outlets || b.g[0].at.localeCompare(a.g[0].at)).slice(0, 5);
+  big.hidden = !most.length;
+  big.innerHTML = `<h2>Biggest stories</h2><p class="sub">Most outlets on one story, last 7 days. The headline is the first report.</p>
+    <ul class="news">${most.map(({ g, outlets }) => { const i = g[g.length - 1]; return `<li>
+      <a href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a>
+      <div class="m"><b>${outlets} outlets</b> · ${g.length} headlines · <span class="tag">${esc(i.name)}</span> · first ${ago(i.at)}, latest ${ago(g[0].at)}</div></li>`; }).join('')}</ul>`;
+}
 function renderNews() {
   const n = S.news; if (!n) return;
   document.querySelectorAll('#lang button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === S.lang)));
@@ -1055,11 +1296,26 @@ function renderNews() {
   $('#chips').innerHTML = `<button class="chip" data-k="all" aria-pressed="${S.filter === 'all'}">All</button>` + n.subjects.map(chip).join('')
     + (S.filter !== 'all' ? `<button class="btn" id="chip-analysis" type="button">Analysis →</button>` : '');
   if ($('#chip-analysis')) $('#chip-analysis').onclick = () => openAnalysis(S.filter);
-  const seen = new Set();
-  const items = n.items.filter(i => (S.filter === 'all' ? !seen.has(i.link) && seen.add(i.link) : i.key === S.filter)).slice(0, 80);
-  $('#newslist').innerHTML = (items.length ? items.map(i => `<li>
-      <a href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a>
-      <div class="m">${esc(i.source)} · ${ago(i.at)} · <span class="tag">${esc(i.name)}</span></div></li>`).join('')
+  // one row per story (lib/news.mjs groups them), newest headline on top, the other outlets folded under it
+  renderMix(n, dayOf);
+  // "All" keeps each stock to its 15 newest stories, so the busiest names don't bury the rest
+  const seen = new Set(), story = new Map(), per = new Map();
+  for (const i of n.items.filter(i => (S.filter === 'all' ? !seen.has(i.link) && seen.add(i.link) : i.key === S.filter))) {
+    const k = i.story ?? i.link;
+    if (!story.has(k)) {
+      if (S.filter === 'all' && (per.get(i.key) || 0) >= 15) continue;
+      per.set(i.key, (per.get(i.key) || 0) + 1);
+    }
+    (story.get(k) || story.set(k, []).get(k)).push(i);
+  }
+  const items = [...story.values()].slice(0, 80);
+  const a = (i, text) => `<a href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`;
+  $('#newslist').innerHTML = (items.length ? items.map(([i, ...more]) => `<li>
+      ${a(i, i.title)}
+      <div class="m">${esc(i.source)} · ${ago(i.at)} · <span class="tag">${esc(i.name)}</span></div>
+      ${more.length ? `<details class="also"><summary>+${more.length} more</summary><ul>${more.map(o => `<li>
+        ${o.title === i.title ? a(o, o.source) : `${a(o, o.title)} <span class="m">${esc(o.source)}</span>`} <span class="m">· ${ago(o.at)}</span></li>`).join('')}
+      </ul></details>` : ''}</li>`).join('')
     : `<li class="muted">${n.subjects.length ? 'No headlines in the last 7 days.' : 'Nothing to follow yet - upload an export or follow a stock above.'}</li>`)
     + (n.errors.length ? `<li class="down">${n.errors.map(esc).join('<br>')}</li>` : '');
   document.querySelectorAll('#chips .chip').forEach(c => c.onclick = async ev => {
@@ -1086,6 +1342,361 @@ $('#add').onsubmit = async ev => {
     $('#addq').value = ''; S.filter = item.key;
     toast(`Following <b>${esc(item.name)}</b>`);
     await loadNews();
+  } catch (e) { toast(`<span class="down">${esc(e.message)}</span>`); }
+  finally { btn.disabled = false; }
+};
+
+// ------------------------------------------------------------ research: one stock, held or not
+// A read-out made from the numbers by fixed rules (lib/research.mjs) - no model. Each point's
+// colour has its rule under "?". Researching a stock follows it, so it also shows in News.
+const R = { key: store.get('tro.rkey', ''), amount: Number(store.get('tro.ramt', '')) || 0, by: store.get('tro.rby', 'position'),
+            open: store.get('tro.ropen', '') === '1', data: null, seq: 0 };
+/** One read-out row: dot, topic, headline; the sentence and an investor's checks open on click. */
+function roRow(p) {
+  const dot = `<span class="dot" style="background:var(${TONE[p.tone]})" aria-label="${p.tone}"></span>`;
+  const q = `<span class="q" title="${esc(p.rule || 'Not coloured: a fact, not a judgement.')}">?</span>`;
+  if (!p.head) return `<div class="ro-row"><div class="s">${dot}<span class="t">${esc(p.topic)}</span><span class="h">${esc(p.text)}</span>${q}</div></div>`;
+  const chk = p.checks ? `<div class="chk">${p.checks.map(c => `<span class="${c.ok == null ? 'na' : c.ok ? 'ok' : 'no'}">${c.ok == null ? '?' : c.ok ? '✓' : '✗'} ${esc(c.label)}</span>`).join('')}</div>` : '';
+  return `<details class="ro-row"${R.open ? ' open' : ''}><summary>${dot}<span class="t">${esc(p.topic)}</span><span class="h">${esc(p.head)}</span>${q}</summary>
+    <p class="x">${esc(p.text)}</p>${chk}</details>`;
+}
+const TONE = { good: '--good', bad: '--critical', neutral: '--axis' };
+// the same rules as the server (lib/research.mjs): dragging the amount recomputes here, no round trip
+let RX = null, KX = null;
+import('/lib/research.mjs').then(m => { RX = m; if (R.data && $('#r-slide')) drawFit(); }).catch(() => {});
+const KXP = import('/lib/kpis.mjs').then(m => (KX = m)).catch(() => null);
+
+async function loadResearch() {
+  try { S.watch = (await api('/api/watchlist')).items; } catch { /* chips from holdings only */ }
+  renderResearchChips();
+  if (R.key) openResearch(R.key);
+  else $('#r-body').innerHTML = `<div class="card"><p class="muted" style="margin:0">Type a stock above - a name, an ISIN or a US ticker like <b>SE</b>. You get a read-out from its numbers, this week's news, and what buying it would do to your depot.</p></div>`;
+}
+function renderResearchChips() {
+  const held = (S.data?.positions || []).map(p => ({ key: p.key, name: p.name, held: true }));
+  const list = held.concat(S.watch.filter(w => !held.some(h => h.key === w.key)).map(w => ({ key: w.key, name: w.name, held: false })));
+  $('#r-chips').innerHTML = list.map(s => `<button class="chip${s.held ? '' : ' watch'}" data-k="${esc(s.key)}" aria-pressed="${R.key === s.key}">
+    ${esc(s.name)}${s.held ? '' : `<span class="x" data-rm="${esc(s.key)}" title="Stop following">×</span>`}</button>`).join('');
+  $('#r-chips').querySelectorAll('.chip').forEach(c => c.onclick = async ev => {
+    const rm = ev.target.closest('[data-rm]');
+    if (rm) {
+      ev.stopPropagation();
+      await api(`/api/watchlist/${encodeURIComponent(rm.dataset.rm)}`, { method: 'DELETE' });
+      S.news = null;
+      if (R.key === rm.dataset.rm) { R.key = ''; store.set('tro.rkey', ''); }
+      return loadResearch();
+    }
+    openResearch(c.dataset.k);
+  });
+}
+async function openResearch(key) {
+  const seq = ++R.seq;
+  R.key = key; store.set('tro.rkey', key);
+  $('#r-chips').querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.k === key)));
+  if (R.data?.key !== key) $('#r-body').innerHTML = `<div class="card"><p class="muted" style="margin:0">Reading ${esc(displayName(key))}: prices, financials, analysts, news…</p></div>`;
+  try {
+    const d = await api(`/api/research/${encodeURIComponent(key)}`);
+    if (seq !== R.seq) return;                       // another one was asked for meanwhile
+    R.data = d; renderResearch();
+  } catch (e) { if (seq === R.seq) $('#r-body').innerHTML = `<div class="card"><p class="down" style="margin:0">${esc(e.message)}</p></div>`; }
+}
+function renderResearch() {
+  const d = R.data, pr = d.profile, q = d.quote;
+  const dayPct = q?.prev ? (q.last / q.prev - 1) * 100 : null;
+  const head = `<div class="card">
+    <div class="rhead"><div>
+        <h2 style="font-size:18px">${esc(d.name)}</h2>
+        <div class="id muted" style="font-size:12px">${[d.isin, pr?.symbol, pr?.sector, pr?.country].filter(Boolean).map(esc).join(' · ')}</div>
+        ${q ? `<div class="px"><span class="v">${price(q.last)}</span>${dayPct != null ? move(dayPct, dayPct) : ''}<span class="muted" style="font-size:12px">${esc(q.venue || '')}</span></div>` : ''}
+      </div>
+      <button class="btn" id="r-more" type="button">Charts &amp; financials →</button></div>
+    ${d.held ? `<p class="note" style="margin-top:6px">You hold ${shares(d.held.shares)} · ${eur(d.held.value)} · <span class="${dir(d.held.gain)}">${signed(d.held.gain)} (${pct(d.held.gainPct)})</span> · ${N0.format(d.held.weight)} % of the depot</p>` : ''}
+    <div class="row" style="margin:16px 0 0"><h3 style="margin:0;font-size:13px">Read-out</h3>
+      <div class="keys" style="margin:0"><span><i style="background:var(--good)"></i>speaks for it</span><span><i style="background:var(--critical)"></i>speaks against it</span><span><i style="background:var(--axis)"></i>a fact</span>
+        <button class="btn" id="r-open" type="button" style="padding:2px 10px;font-size:12px">${R.open ? 'Hide details' : 'Show all details'}</button></div></div>
+    <div class="ro-grid">${(d.groups || []).map(g => {
+      const pts = d.points.filter(p => p.group === g.id && p.topic !== 'In your depot');
+      const dp = g.id === 'facts' && d.depot;
+      if (!pts.length && !dp) return '';
+      const good = pts.filter(p => p.tone === 'good').length, bad = pts.filter(p => p.tone === 'bad').length;
+      return `<section class="ro-sec"><h4>${esc(g.label)}<span class="sc">${good ? `<b class="up">${good} for</b>` : ''}${good && bad ? ' · ' : ''}${bad ? `<b class="down">${bad} against</b>` : ''}</span></h4>
+        ${pts.map(roRow).join('')}${dp ? '<div id="r-dp"></div>' : ''}</section>`;
+    }).join('')}</div>
+    <p class="note">Made from public data by fixed rules - click a row for the full sentence, hover "?" for its rule. ${d.notes?.length ? d.notes.map(esc).join(' ') + ' ' : ''}Not investment advice. Ask Claude about it: the <b>research</b> tool in the MCP server returns the same.</p>
+  </div>`;
+
+  // "if you buy": a slider from 0 to your cash; the part where this stock passes 25 % of the depot is red
+  const fit = d.depot ? (() => {
+    const cash = d.depot.cash > 0 ? d.depot.cash / 100 : 0;
+    const max = cash >= 1000 ? Math.ceil(cash / 1000) * 1000 : Math.max(5000, Math.ceil(d.fit.totalBefore / 100000) * 1000);
+    R.max = max; R.step = max <= 10000 ? 100 : max <= 50000 ? 250 : 1000;
+    R.amount = Math.min(R.amount, max);
+    return `<div class="card" id="r-fit"><h2>If you buy</h2>
+      <div class="amtv" id="r-amtv"></div>
+      <div class="slide">
+        <span class="mark" id="r-mark" hidden></span><span class="tick" id="r-tick" hidden></span>
+        <input type="range" id="r-slide" min="0" max="${max}" step="${R.step}" value="${R.amount}" aria-label="Euros to buy">
+        <div class="slide-l"><span>0 €</span><span>${cash >= 1000 ? `your cash ${eur0(d.depot.cash)}` : eur0(max * 100)}</span></div>
+      </div>
+      <div id="r-fitbody"></div></div>`;
+  })() : `<div class="card"><h2>If you buy</h2><p class="sub" style="margin:0">Upload your export to see what a buy does to your depot.</p></div>`;
+
+  // stories naming the company first; the rest only mention it
+  const seen = new Set(), story = new Map();
+  for (const i of d.news.filter(i => !seen.has(i.link) && seen.add(i.link))) {
+    const k = i.story ?? i.link; (story.get(k) || story.set(k, []).get(k)).push(i);
+  }
+  const groups = [...story.values()], named = groups.filter(g => g.some(i => i.about)), other = groups.filter(g => !g.some(i => i.about));
+  const li = g => { const i = g[0], outlets = new Set(g.map(x => x.source)).size; return `<li>
+    <a href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a>
+    <div class="m">${esc(i.source)} · ${ago(i.at)}${outlets > 1 ? ` · <b>${outlets} outlets</b>` : ''}</div></li>`; };
+  const news = `<div class="card"><h2>News, last 7 days</h2>
+    <p class="sub">${d.themes.length ? `About: ${d.themes.map(t => `<span class="${t.tone === 'good' ? 'up' : t.tone === 'bad' ? 'down' : ''}">${esc(t.label)} (${t.stories})</span>`).join(' · ')}` : 'No recurring theme in the headlines.'}</p>
+    <ul class="news">${named.slice(0, 25).map(li).join('') || '<li class="muted">No headline names it this week.</li>'}</ul>
+    ${other.length ? `<details class="also" style="margin-top:8px"><summary class="muted" style="font-size:12.5px;cursor:pointer">${other.length} more that only mention it</summary><ul class="news">${other.slice(0, 30).map(li).join('')}</ul></details>` : ''}
+    ${d.errors.length ? `<p class="down">${d.errors.map(esc).join('<br>')}</p>` : ''}</div>`;
+
+  $('#r-body').innerHTML = head + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div>' : '')
+    + `<div class="pair">${fit}${news}</div>`;
+  $('#r-more').onclick = () => openAnalysis(d.key);
+  $('#r-open').onclick = () => {
+    R.open = !R.open; store.set('tro.ropen', R.open ? '1' : '');
+    document.querySelectorAll('#r-body details.ro-row').forEach(x => { x.open = R.open; });
+    $('#r-open').textContent = R.open ? 'Hide details' : 'Show all details';
+  };
+  R.kedit = false; renderKpis();
+  const sl = $('#r-slide');
+  if (sl) {
+    sl.oninput = () => { R.amount = Number(sl.value) || 0; drawFit(); };
+    sl.onchange = () => store.set('tro.ramt', R.amount ? String(R.amount) : '');
+    drawFit();
+  }
+}
+
+/** Everything under the slider, for the amount it is at. The slider itself is never redrawn while dragged. */
+function drawFit() {
+  const d = R.data, a = R.amount, sl = $('#r-slide');
+  const f = RX ? RX.fitIn(d.depot, d, a) : d.fit;            // before the module loads: the server's, at 0 €
+  $('#r-amtv').textContent = eur0(a * 100);
+
+  // track: blue up to the amount, red where the stock is 25 % or more of the depot
+  const at = v => `calc(11px + (100% - 22px) * ${Math.max(0, Math.min(1, v / R.max))})`;
+  const t = RX ? RX.amountFor(d.depot, d, 25) : Infinity, red = 'color-mix(in srgb, var(--critical) 30%, transparent)';
+  const stops = t <= R.max
+    ? (a <= t ? [`var(--s1) 0`, `var(--s1) ${at(a)}`, `var(--track) ${at(a)}`, `var(--track) ${at(t)}`, `${red} ${at(t)}`, `${red} 100%`]
+              : [`var(--s1) 0`, `var(--s1) ${at(t)}`, `var(--critical) ${at(t)}`, `var(--critical) ${at(a)}`, `${red} ${at(a)}`, `${red} 100%`])
+    : [`var(--s1) 0`, `var(--s1) ${at(a)}`, `var(--track) ${at(a)}`, `var(--track) 100%`];
+  sl.style.background = `linear-gradient(to right, ${stops.join(', ')})`;
+  const mark = $('#r-mark'), tick = $('#r-tick');
+  mark.hidden = tick.hidden = !(t <= R.max);
+  if (t <= R.max) {
+    mark.style.left = tick.style.left = at(t);
+    mark.textContent = t > 0 ? `25 % of the depot at ${eur0(t * 100)}` : 'already 25 % of the depot or more';
+    mark.style.transform = `translateX(${t / R.max < 0.15 ? '-11px' : t / R.max > 0.85 ? 'calc(-100% + 11px)' : '-50%'})`;
+  }
+
+  // by position, sector or country: the 7 largest after, plus this stock's own group if it is smaller
+  const rows = { position: f.positions, sector: f.sectors, country: f.countries }[R.by] ?? f.positions;
+  const label = c => c.name ?? c.sector ?? c.country;
+  const top = rows.filter(c => c.before >= 0.5 || c.after >= 0.5).slice(0, 7);
+  const mine = rows.find(c => c.mine);
+  if (mine && !top.includes(mine)) top.push(mine);
+  const hi = Math.max(1, ...top.map(c => Math.max(c.before, c.after)));
+  const bar = (v, c) => `<i style="width:${v / hi * 100}%;background:var(${c})"></i>`;
+  $('#r-fitbody').innerHTML = `
+    <p class="sub">Your stocks + crypto now ${eur0(f.totalBefore)}${a ? `, after ${eur0(f.totalAfter)}` : ''}.${f.cash != null && a * 100 > f.cash ? ' <span class="down">More than your cash at Trade Republic.</span>' : ''}</p>
+    <div class="tiles" style="margin-top:0">
+      <div class="tile"><div class="k">${esc(d.name)} in the depot</div><div class="v ${f.weightAfter >= 25 ? 'down' : ''}">${N0.format(f.weightAfter)} %</div><div class="s">now ${N0.format(f.weightBefore)} %</div></div>
+      <div class="tile"><div class="k">Largest position${a ? ' after' : ''}</div><div class="v">${N0.format(f.largestAfter.weight)} %</div><div class="s">${esc(f.largestAfter.name)}</div></div>
+      <div class="tile"><div class="k">In US dollars</div><div class="v">${N0.format(f.usdAfter)} %</div><div class="s">now ${N0.format(f.usdBefore)} % · US ISIN, ADRs too</div></div>
+    </div>
+    <div class="row" style="margin:16px 0 6px"><h3 style="margin:0;font-size:13px">Share by ${R.by}</h3>
+      <div class="seg" id="r-by"><button data-a="position">Position</button><button data-a="sector">Sector</button><button data-a="country">Country</button></div></div>
+    <div class="keys" style="margin:0 0 8px"><span><i style="background:var(--axis)"></i>now</span><span><i style="background:var(--s1)"></i>after</span></div>
+    <div class="cmp">${top.map(c => `<span class="lbl" title="${esc(label(c))}">${c.mine ? `<b>${esc(label(c))}</b>` : esc(label(c))}</span><span class="bars">${bar(c.before, '--axis')}${bar(c.after, '--s1')}</span>
+      <span class="num">${N0.format(c.before)} → <b>${N0.format(c.after)} %</b></span>`).join('')}</div>
+    <p class="note">Share of stocks + crypto at today's prices${rows.length > top.length ? `; ${rows.length - top.length} smaller not shown` : ''}. ${R.by === 'country' ? 'Country is where the company is based, not where it sells. ' : ''}In bold: where ${esc(d.name)} goes.</p>`;
+  $('#r-by').querySelectorAll('button').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.a === R.by));
+    btn.onclick = () => { R.by = btn.dataset.a; store.set('tro.rby', R.by); drawFit(); };
+  });
+
+  // the read-out's own line for it
+  const p = RX?.depotPoint(f, d, a), box = $('#r-dp');
+  if (box) box.innerHTML = p ? roRow(p) : '';
+}
+// ------------------------------------------------------------ company numbers (data/kpis/<ISIN>.json)
+// What the company reports in its own results and no feed has: GMV, take rate, loan book...
+// Filled here or by an agent through the MCP; your green / red lines in data/kpi-lines.json.
+const qLabel = p => `${p.slice(5)} '${p.slice(2, 4)}`;
+const slug = s => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/^(\d)/, 'n$1').slice(0, 40);
+async function renderKpis() {
+  const box = $('#r-kpi'); if (!box) return;
+  if (!KX && !(await KXP)) { box.innerHTML = '<p class="muted" style="margin:0">Company numbers need lib/kpis.mjs.</p>'; return; }
+  const d = R.data, t = d.kpis, file = `data/kpis/${d.isin}.json`;
+  // beside its charts, half and half; editing and the empty state take the whole width
+  const split = !R.kedit && !!t?.rows?.length;
+  $('#r-kpirow').className = split ? 'pair' : '';
+  $('#r-kpic').hidden = !split;
+  if (R.kedit) return renderKpiEdit(box, t);
+  if (!t?.rows?.length) {
+    box.innerHTML = `<div class="row" style="margin:0"><div><h2>Company numbers</h2>
+      <p class="sub" style="margin:0">None yet for ${esc(d.name)}. These are the numbers from the company's own quarterly results that no price feed has - for Sea: Shopee GMV, take rate, loan book. Add them by hand, or ask an agent through the MCP tool <b>company_numbers</b>. They are saved on this machine in <b>${esc(file)}</b>.</p></div>
+      <button class="btn" id="k-edit" type="button">Add</button></div>`;
+    return ($('#k-edit').onclick = () => { R.kedit = true; renderKpis(); });
+  }
+  const lined = t.rows.some(r => r.line);                    // no lines set: no column for them
+  const line = r => r.line ? `${r.line.green >= r.line.red ? '≥' : '≤'} ${N2.format(r.line.green)} green · ${r.line.green >= r.line.red ? '≤' : '≥'} ${N2.format(r.line.red)} red<br><span class="muted">${r.measure === 'growth' ? 'growth %' : 'level %'}</span>` : '<span class="muted">–</span>';
+  box.innerHTML = `<div class="row" style="margin-bottom:6px"><div><h2>Company numbers${t.due ? '<span class="badge">update due</span>' : ''}</h2>
+      <p class="sub" style="margin:0">From ${esc(t.company || d.name)}'s own quarterly results · latest ${esc(qLabel(t.latest.period))}${t.latest.reported ? `, reported ${esc(day(t.latest.reported))}` : ''}${t.latest.source ? ` · <a href="${esc(t.latest.source)}" target="_blank" rel="noopener noreferrer">source</a>` : ''}${t.due ? ' · <span class="down">newer results are out</span>' : ''}</p></div>
+      <button class="btn" id="k-edit" type="button">Edit</button></div>
+    <div class="scroll"><table class="kt"><thead><tr><th>Number</th>${t.last.map(p => `<th>${esc(qLabel(p))}</th>`).join('')}${lined ? '<th>Your line</th>' : ''}</tr></thead><tbody>
+      ${t.rows.map(r => `<tr><td>${esc(r.label)}${r.help ? `<span class="q" title="${esc(r.help)}">?</span>` : ''}</td>
+        ${r.cells.map((c, i) => `<td>${i === r.cells.length - 1 && r.tone ? `<span class="dot" style="background:var(${TONE[r.tone]})"></span>` : ''}${esc(KX.fmt(c.value, r.unit))}
+          <span class="small ${c.change == null ? '' : (r.unit === '%' ? '' : dir(c.change))}">${esc(KX.fmtChange(c.change, r.unit))}</span></td>`).join('')}
+        ${lined ? `<td class="ln">${line(r)}</td>` : ''}</tr>`).join('')}
+    </tbody></table></div>
+    <p class="note">Under each number: the change on the same quarter a year before - % for amounts, points for rates. A dot only where you set a line (Edit): it judges an amount's growth and a rate's level. Saved on this machine: <b>${esc(file)}</b>, your lines in data/kpi-lines.json.</p>`;
+  $('#k-edit').onclick = () => { R.kedit = true; renderKpis(); };
+  renderKpiCharts(t);
+}
+/** Every saved quarter per number, as small bar charts - each on its own scale, units differ. */
+function renderKpiCharts(t) {
+  const box = $('#r-kpic'), first = t.rows[0].series[0]?.period;
+  box.innerHTML = `<h2>Over time</h2>
+    <p class="sub" style="margin:0 0 6px">Every quarter saved${first ? `, ${esc(qLabel(first))} to ${esc(qLabel(t.latest.period))}` : ''}. Each chart has its own scale; hover a bar for its quarter.</p>
+    <div class="kc">${t.rows.map((r, i) => { const now = r.cells.at(-1); return `<div>
+      <div class="kc-h"><span class="l" title="${esc(r.label)}">${esc(r.label)}</span>
+        <span class="v">${esc(KX.fmt(now.value, r.unit))}<small class="${r.unit === '%' ? '' : dir(now.change)}">${esc(KX.fmtChange(now.change, r.unit))}</small></span></div>
+      <div class="chart" data-i="${i}"></div></div>`; }).join('')}</div>
+    <p class="note">Full colour: the latest quarter · medium: the same quarter a year before - the change beside each number compares those two. Amounts are bars from zero; rates a line on a zoomed scale. Green / red: your line (Edit).</p>`;
+  box.querySelectorAll('.chart[data-i]').forEach(h => kpiChart(h, t.rows[h.dataset.i]));
+}
+/**
+ * One number over its quarters. The latest quarter in full colour, the same quarter a year before
+ * in a medium shade - the header's change compares those two - the rest faded. Amounts are bars
+ * from zero; rates (%) a line on a zoomed scale, since their level moves in tenths. With your
+ * green / red line the latest mark takes its colour, and a rate shows both lines dashed.
+ */
+function kpiChart(host, r) {
+  const pts = r.series, n = pts.length, W = Math.max(140, host.clientWidth), H = 70;
+  const rate = r.unit === '%', last = n - 1, ago = pts.findIndex(p => p.period === `${Number(pts[last].period.slice(0, 4)) - 1}${pts[last].period.slice(4)}`);
+  const now = r.tone === 'good' ? '--good' : r.tone === 'bad' ? '--critical' : null;
+  const shade = (i, c) => i === last ? `var(${now ?? c})` : `color-mix(in srgb, var(${c}) ${i === ago ? 60 : 28}%, transparent)`;
+  const vals = pts.map(p => p.value).filter(v => v != null);
+  const ref = rate && r.line ? [{ v: r.line.green, c: '--good' }, { v: r.line.red, c: '--critical' }] : [];
+  let g = '', m, y;
+  if (rate) {
+    // zoomed: the range of the values and your lines, with a little air - labelled, as it does not start at 0
+    m = { l: 30, r: 6, t: 6, b: 16 };
+    let lo = Math.min(...vals, ...ref.map(x => x.v)), hi = Math.max(...vals, ...ref.map(x => x.v));
+    const pad = (hi - lo || Math.abs(hi) || 1) * 0.15; lo -= pad; hi += pad;
+    y = v => m.t + (H - m.t - m.b) * ((hi - v) / (hi - lo));
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(hi)}" y2="${y(hi)}" stroke="var(--grid)"/><line x1="${m.l}" x2="${W - m.r}" y1="${y(lo)}" y2="${y(lo)}" stroke="var(--grid)"/>`;
+    g += `<text x="${m.l - 4}" y="${y(hi) + 4}" text-anchor="end">${esc(nf(1, 1).format(hi))}</text><text x="${m.l - 4}" y="${y(lo)}" text-anchor="end">${esc(nf(1, 1).format(lo))}</text>`;
+  } else {
+    m = { l: 1, r: 1, t: 6, b: 16 };
+    const hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
+    y = v => m.t + (H - m.t - m.b) * ((hi - v) / (hi - lo || 1));
+  }
+  const band = (W - m.l - m.r) / n, cx = i => m.l + i * band + band / 2;
+  for (const x of ref) g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(x.v)}" y2="${y(x.v)}" stroke="var(${x.c})" stroke-width="1" stroke-dasharray="3 3"/>`;
+  if (rate) {
+    const seg = pts.map((p, i) => p.value == null ? null : `${cx(i).toFixed(1)},${y(p.value).toFixed(1)}`);
+    let d = '', pen = false;
+    for (const s of seg) { if (s == null) { pen = false; continue; } d += `${pen ? 'L' : 'M'}${s}`; pen = true; }
+    g += `<path d="${d}" fill="none" stroke="color-mix(in srgb, var(--pos) 55%, transparent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    pts.forEach((p, i) => {
+      if (p.value == null || (i !== last && i !== ago)) return;
+      g += `<circle cx="${cx(i)}" cy="${y(p.value)}" r="4" fill="${shade(i, '--pos')}" stroke="var(--surface)" stroke-width="2"/>`;
+    });
+  } else {
+    const bw = Math.max(3, Math.min(16, band - 4));
+    pts.forEach((p, i) => {
+      const x0 = cx(i) - bw / 2, y0 = y(0), y1 = y(p.value ?? 0), h = Math.abs(y1 - y0);
+      if (p.value == null || h < 0.5) return;
+      const rr = Math.min(4, h, bw / 2), sg = y1 < y0 ? 1 : -1;
+      g += `<path d="M${x0},${y0}V${y1 + sg * rr}Q${x0},${y1} ${x0 + rr},${y1}H${x0 + bw - rr}Q${x0 + bw},${y1} ${x0 + bw},${y1 + sg * rr}V${y0}Z" fill="${shade(i, p.value >= 0 ? '--pos' : '--neg')}"/>`;
+    });
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--axis)" stroke-width="1"/>`;
+  }
+  g += `<text x="${m.l}" y="${H - 3}">${esc(qLabel(pts[0].period))}</text><text x="${W - m.r}" y="${H - 3}" text-anchor="end">${esc(qLabel(pts[last].period))}</text>`;
+  pts.forEach((p, i) => { g += `<rect data-i="${i}" x="${m.l + i * band}" y="0" width="${band}" height="${H}" fill="transparent"/>`; });
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(r.label)} by quarter">${g}</svg>`;
+  host.querySelectorAll('rect[data-i]').forEach(el => {
+    const p = pts[el.dataset.i];
+    el.onpointermove = ev => showTip(ev, `<div class="t">${esc(qLabel(p.period))}</div>` + tipRow(r.label, esc(KX.fmt(p.value, r.unit)))
+      + (p.change != null ? tipRow('vs a year before', esc(KX.fmtChange(p.change, r.unit))) : ''));
+    el.onpointerleave = hideTip;
+  });
+}
+/** Edit the last four quarters, add one quarter and numbers, set your lines. Saved as a whole file. */
+function renderKpiEdit(box, t) {
+  const d = R.data, rows = t?.rows ?? [], last = t?.last ?? [];
+  const v = x => x == null ? '' : String(x);
+  box.innerHTML = `<h2>Company numbers · edit</h2>
+    <p class="sub">Numbers from ${esc(d.name)}'s own results release or filing, with its link. Amounts like 38,3 in the unit you pick; rates in %.</p>
+    <div class="scroll"><table class="kt"><thead><tr><th>Number</th><th>Unit</th>${last.map(p => `<th>${esc(qLabel(p))}</th>`).join('')}
+      <th><input id="k-p" placeholder="2026-Q3" title="New quarter"><input id="k-r" type="date" title="Reported on"><input id="k-s" class="w" placeholder="https://… source" title="Link to the results release"></th>
+      <th>Green at</th><th>Red at</th></tr></thead><tbody>
+      ${rows.map(r => `<tr data-id="${esc(r.id)}" data-unit="${esc(r.unit)}"><td>${esc(r.label)}</td><td>${esc(r.unit)}</td>
+        ${r.cells.map(c => `<td><input data-p="${esc(c.period)}" value="${esc(v(c.value))}" inputmode="decimal"></td>`).join('')}
+        <td><input data-new value="" inputmode="decimal"></td>
+        <td><input data-g value="${esc(v(r.line?.green))}" inputmode="decimal" title="${r.unit === '%' ? 'level %' : 'growth % on a year before'}"></td>
+        <td><input data-r value="${esc(v(r.line?.red))}" inputmode="decimal" title="${r.unit === '%' ? 'level %' : 'growth % on a year before'}"></td></tr>`).join('')}
+      <tr data-add><td><input class="w" data-l placeholder="+ new number, e.g. Shopee GMV"></td>
+        <td><select data-u><option>$bn</option><option>$m</option><option>bn</option><option>m</option><option>%</option></select></td>
+        ${last.map(() => '<td></td>').join('')}<td><input data-new value="" inputmode="decimal"></td><td></td><td></td></tr>
+    </tbody></table></div>
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" id="k-save" type="button">Save</button><button class="btn" id="k-cancel" type="button">Cancel</button></div>
+    <p class="note">A new quarter needs its period and reported date; values left empty stay empty. Lines need both numbers: green above red means higher is better (GMV growth), below means lower is (NPL).</p>`;
+  $('#k-cancel').onclick = () => { R.kedit = false; renderKpis(); };
+  $('#k-save').onclick = async () => {
+    // "38.3" and "38,3" both; with a comma, dots are thousands ("5.587,6")
+    const num = s => { s = s.trim(); if (!s) return null; const n = Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s);
+                       if (!Number.isFinite(n)) throw new Error(`not a number: ${s}`); return n; };
+    try {
+      const file = structuredClone((await api(`/api/kpis/${encodeURIComponent(d.key)}`)).file) || { metrics: [], quarters: [] };
+      const q = p => file.quarters.find(x => x.period === p) || (file.quarters.push({ period: p, values: {} }), file.quarters.at(-1));
+      const np = $('#k-p').value.trim().toUpperCase().replace(/^(\d{4})\s*-?\s*(Q[1-4])$/, '$1-$2');
+      const lines = {};
+      for (const tr of box.querySelectorAll('tbody tr')) {
+        let id = tr.dataset.id;
+        if (tr.hasAttribute('data-add')) {
+          const label = tr.querySelector('[data-l]').value.trim(); if (!label) continue;
+          id = slug(label);
+          file.metrics.push({ id, label, unit: tr.querySelector('[data-u]').value, help: '' });
+        }
+        tr.querySelectorAll('input[data-p]').forEach(i => { q(i.dataset.p).values[id] = num(i.value); });
+        const nv = tr.querySelector('input[data-new]').value;
+        if (np && nv.trim() !== '') q(np).values[id] = num(nv);
+        const g = tr.querySelector('[data-g]'), r = tr.querySelector('[data-r]');
+        if (g && r) lines[id] = { green: num(g.value), red: num(r.value) };
+      }
+      if (np) Object.assign(q(np), { reported: $('#k-r').value || null, source: $('#k-s').value.trim() || null });
+      if (np && !$('#k-r').value) throw new Error('the new quarter needs its reported date');
+      await api(`/api/kpis/${encodeURIComponent(d.key)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ file }) });
+      await api(`/api/kpi-lines/${encodeURIComponent(d.key)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lines }) });
+      toast(`Saved to <b>data/kpis/${esc(d.isin)}.json</b>`);
+      openResearch(d.key);                          // the read-out's line for it changes too
+    } catch (e) { toast(`<span class="down">${esc(e.message)}</span>`); }
+  };
+}
+
+$('#r-add').onsubmit = async ev => {
+  ev.preventDefault();
+  const q = $('#r-q').value.trim(); if (!q) return;
+  const btn = ev.target.querySelector('button'); btn.disabled = true;
+  try {
+    const hit = (await api(`/api/search?q=${encodeURIComponent(q)}`)).results[0];
+    if (!hit) throw new Error(`nothing found for "${q}"`);
+    if (!heldPos(hit.key) && !watchItem(hit.key)) {         // researching follows it: it shows in News too
+      const item = await api('/api/watchlist', post({ query: hit.key }));
+      S.watch = S.watch.concat({ ...item, quote: null }); S.news = null;
+      toast(`Following <b>${esc(item.name)}</b> - remove it with × on its chip`);
+    }
+    $('#r-q').value = '';
+    renderResearchChips(); openResearch(hit.key);
   } catch (e) { toast(`<span class="down">${esc(e.message)}</span>`); }
   finally { btn.disabled = false; }
 };
@@ -1148,6 +1759,7 @@ async function loadSummary(live = false) {
     renderMeta(); renderToday(); renderMonths(); renderTaxes();
     // holdings may have changed: news follows them (not on the minute tick - headlines move slower)
     if (!live) { if ($('#tab-news').classList.contains('on')) loadNews(); else S.news = null; }
+    if (!live && $('#tab-research').classList.contains('on')) renderResearchChips();
     else if (S.news) renderNews();
   } catch (e) { $('#meta').innerHTML = `<span class="down">${esc(e.message)}</span>`; }
 }

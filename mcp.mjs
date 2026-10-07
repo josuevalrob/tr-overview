@@ -35,9 +35,9 @@ async function resolveStock(text) {
   const known = new Map();
   for (const r of rows) if (r.key && (r.type === 'BUY' || r.type === 'SELL')) known.set(r.key, r.name || r.key);
   for (const w of app.watchRaw()) known.set(w.key, w.name);
-  const up = t.toUpperCase(), low = t.toLowerCase();
+  const up = t.toUpperCase(), word = new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
   for (const [k, n] of known) if (k.toUpperCase() === up) return { key: k, name: n };
-  for (const [k, n] of known) if (n.toLowerCase().includes(low)) return { key: k, name: n };
+  for (const [k, n] of known) if (word.test(n)) return { key: k, name: n };    // at a word start: "meta" finds Meta Platforms, "ron" not Micron
   const hit = (await app.search(t))[0];
   if (!hit) throw new Error(`nothing found for "${t}"`);
   return { key: hit.key, name: hit.name };
@@ -54,12 +54,26 @@ const position = (p, profiles) => ({
 
 const RANGES = { '1W': 7, '1M': 31, 'YTD': 'ytd', '1Y': 366, 'ALL': null };
 
+// company numbers: last 4 quarters, change on the same quarter a year before (amounts %, rates points)
+const kpiOut = t => t && ({
+  company: t.company, currency: t.currency, latest: t.latest, update_due: t.due,
+  numbers: t.rows.map(r => ({ id: r.id, label: r.label, unit: r.unit, help: r.help, judged_by: r.measure,
+    your_line: r.line, tone: r.tone,
+    quarters: r.cells.map(c => ({ period: c.period, value: c.value, change: c.change == null ? null : r2(c.change), change_unit: r.unit === '%' ? 'points' : '%' })) })),
+});
+
+// money-weighted (XIRR), so money paid in last week weighs a week; null under a year of data
+const perYear = a => ({
+  everything_pct: r2(a?.all.pct), stocks_and_crypto_pct: r2(a?.stocks.pct),
+  since: a?.all.since ?? null, method: 'money-weighted (XIRR): counts how long each euro was in',
+});
+
 // ---------------------------------------------------------------- tools
 
 const TOOLS = [
   {
     name: 'overview',
-    description: 'The depot right now: stocks + crypto value, what was paid, gain since bought, today\'s move, cash, total at Trade Republic, money paid in, and how fresh the transaction export is. Start here.',
+    description: 'The depot right now: stocks + crypto value, what was paid, gain since bought, today\'s move, cash, total at Trade Republic, money paid in, return per year (everything and stocks + crypto), and how fresh the transaction export is. Start here.',
     inputSchema: { type: 'object', properties: {} },
     async run() {
       const d = await app.summary({});
@@ -72,6 +86,7 @@ const TOOLS = [
                              gain_pct: r2(d.cost ? (d.value / d.cost - 1) * 100 : null),
                              today_eur: e(d.day), today_pct: r2(d.dayPct) },
         cash: e(d.cash), total: e(d.cash + d.value), paid_in: e(d.paidIn),
+        return_per_year: perYear(d.annual),
         positions: d.positions.length,
         largest: d.positions.slice(0, 3).map(p => ({ name: p.name, weight_pct: r2(p.weight) })),
         errors: d.errors,
@@ -136,14 +151,14 @@ const TOOLS = [
   },
   {
     name: 'months',
-    description: 'Month by month: money paid in, interest, dividends, price moves, tax + fees, what the month earned (€ and %), stocks value, cash, total.',
+    description: 'Month by month: money paid in, interest, dividends, price moves, tax + fees, what the month earned (€ and %), stocks value, cash, total. Plus the return per year since the start.',
     inputSchema: { type: 'object', properties: {
       from: { type: 'string', description: 'First month, YYYY-MM.' }, to: { type: 'string', description: 'Last month, YYYY-MM.' },
     } },
     async run(a) {
       const d = await app.summary({});
       if (d.empty) return { months: [] };
-      return { months: d.months.filter(m => (!a.from || m.month >= a.from) && (!a.to || m.month <= a.to)).map(m => ({
+      return { return_per_year: perYear(d.annual), months: d.months.filter(m => (!a.from || m.month >= a.from) && (!a.to || m.month <= a.to)).map(m => ({
         month: m.month, partial: m.partial, paid_in: e(m.paidIn), interest: e(m.interest), dividends: e(m.dividends),
         price_move: e(m.market), tax_and_fees: e(m.taxes + m.fees), earned: e(m.result), return_pct: r2(m.returnPct),
         stocks: e(m.value), cash: e(m.cash), total: e(m.total) })) };
@@ -195,6 +210,69 @@ const TOOLS = [
     },
   },
   {
+    name: 'research',
+    description: 'Everything to decide on one stock, held or not: a read-out made from the numbers (price vs 52 weeks, trend vs 50/200-day averages, beta, growth, profit, returns on equity/assets, free cash flow, balance sheet/net cash, valuation incl. P/E on estimates, P/B, PEG, Graham number + checks, Buffett checks, Lynch (growth + yield) / P/E, Ackman checks, analysts, insider trades, short interest, fund holders, next results, what this week\'s headlines are about, dividend, listing currency) - each point with a good/bad/neutral tone and the fixed rule behind it - plus the week\'s top stories. With `amount` (EUR) also what that buy does to the depot: its weight, the largest position, the mix by position, sector and country, and the share in US dollars before and after. Stock by name, ISIN or US ticker ("SE").',
+    inputSchema: { type: 'object', required: ['stock'], properties: {
+      stock: { type: 'string', description: 'Name, ISIN or US ticker, e.g. "Sea Limited", "US81141R1005", "SE".' },
+      amount: { type: 'number', description: 'Euros you think of buying, e.g. 5000.' },
+    } },
+    async run(a) {
+      const { key } = await resolveStock(a.stock);
+      const r = await app.research(key, Number(a.amount) || 0);
+      const seen = new Set(), story = new Map();
+      for (const i of r.news.filter(i => !seen.has(i.link) && seen.add(i.link))) {
+        const g = story.get(i.story);
+        if (g) g.outlets++;
+        else story.set(i.story, { title: i.title, source: i.source, at: i.at, link: i.link, outlets: 1, names_it: i.about });
+      }
+      const f = r.fit;
+      return {
+        name: r.name, key: r.key, isin: r.isin, sector: r.profile?.sector ?? null, country: r.profile?.country ?? null,
+        price_eur: r.quote?.last ?? null, today_pct: r.quote?.prev ? r2((r.quote.last / r.quote.prev - 1) * 100) : null,
+        your_position: r.held && { shares: r.held.shares, value: e(r.held.value), gain_eur: e(r.held.gain), gain_pct: r2(r.held.gainPct), weight_pct: r2(r.held.weight) },
+        readout: r.points.map(p => ({ group: p.group, topic: p.topic, tone: p.tone, head: p.head, text: p.text, ...(p.rule ? { rule: p.rule } : {}), ...(p.checks ? { checks: p.checks } : {}) })),
+        numbers: Object.fromEntries(Object.entries(r.stats).map(([k, v]) => [k, typeof v === 'number' ? r2(v) : v])),
+        company_numbers: r.kpis && kpiOut(r.kpis),
+        news_themes: r.themes,
+        // headlines that name the company first: a keyword search also returns ones that only mention it
+        top_stories: [...story.values()].sort((x, y) => y.names_it - x.names_it || y.outlets - x.outlets || y.at.localeCompare(x.at)).slice(0, 12),
+        ...(f && a.amount ? { if_you_buy: {
+          eur: e(f.amount), weight_after_pct: r2(f.weightAfter), stocks_and_crypto_after: e(f.totalAfter),
+          largest_after: { name: f.largestAfter.name, weight_pct: r2(f.largestAfter.weight) },
+          cash_at_trade_republic: e(f.cash),
+          in_us_dollars_pct: { before: r2(f.usdBefore), after: r2(f.usdAfter), note: 'positions with a US ISIN, ADRs included' },
+          positions_pct: f.positions.map(c => ({ name: c.name, before: r2(c.before), after: r2(c.after) })),
+          sectors_pct: f.sectors.map(c => ({ sector: c.sector, before: r2(c.before), after: r2(c.after) })),
+          countries_pct: f.countries.map(c => ({ country: c.country, before: r2(c.before), after: r2(c.after) })),
+        } } : {}),
+        notes: r.notes, errors: r.errors,
+        note: 'Made from public data by fixed rules, not a recommendation.',
+      };
+    },
+  },
+  {
+    name: 'company_numbers',
+    description: 'The figures a company reports in its own quarterly results that no price feed has (Sea: Shopee GMV, take rate, loan book, NPL; Uber: trips; ...). Kept on this machine in data/kpis/<ISIN>.json. ONLY numbers read from the company\'s own results release or filing, each quarter with its `source` link and `reported` date - never from news, never estimated. get: the last 4 quarters with change on a year before. save: merge `metrics` (by id) and/or one `quarter` (by period). lines: the user\'s own green/red lines (data/kpi-lines.json).',
+    inputSchema: { type: 'object', required: ['stock'], properties: {
+      stock: { type: 'string', description: 'Name, ISIN or US ticker.' },
+      action: { type: 'string', enum: ['get', 'save', 'lines'], description: 'Default get.' },
+      metrics: { type: 'array', description: 'save: [{id: "gmv", label: "Shopee GMV", unit: "$bn"|"$m"|"bn"|"m"|"%", help: "what it is"}]',
+                 items: { type: 'object' } },
+      quarter: { type: 'object', description: 'save: {period: "2026-Q2", reported: "2026-08-11", source: "https://…", values: {gmv: 38.3, …}}' },
+      lines: { type: 'object', description: 'lines: {metricId: {green, red}}. Judges the growth % of amounts and the level of rates (%). green above red = higher is better.' },
+    } },
+    async run(a) {
+      const { key } = await resolveStock(a.stock);
+      const action = a.action || 'get';
+      const next = (await app.analysis(key).catch(() => null))?.us?.earningsDate;    // for "update due"
+      if (action === 'save') await app.kpis.save(key, { metrics: a.metrics, quarter: a.quarter });
+      if (action === 'lines') await app.kpis.lines(key, a.lines);
+      const k = await app.kpis.get(key, next);
+      return k.table ? { ...kpiOut(k.table), file: `data/kpis/${key}.json` }
+                     : { none: true, file: `data/kpis/${key}.json`, note: 'No company numbers yet. Add metrics and a quarter with action save, from the company\'s own results release.' };
+    },
+  },
+  {
     name: 'price_history',
     description: 'Daily closing prices in EUR (LS Exchange) for one stock or crypto, with your buys and sells. At most ~260 points (thinned for long ranges).',
     inputSchema: { type: 'object', required: ['stock'], properties: {
@@ -214,7 +292,7 @@ const TOOLS = [
   },
   {
     name: 'news',
-    description: 'Recent headlines (last 7 days, Google News) for every holding and followed stock, or for one stock.',
+    description: 'Recent headlines (last 7 days, Google News) for every holding and followed stock, or for one stock. One entry per story; alsoIn lists the other outlets that ran it.',
     inputSchema: { type: 'object', properties: {
       stock: { type: 'string', description: 'Only this one (name or ISIN). Any stock works, not only holdings.' },
       lang: { type: 'string', enum: ['en', 'de'] },
@@ -223,10 +301,13 @@ const TOOLS = [
     async run(a) {
       const one = a.stock ? await resolveStock(a.stock) : null;
       const n = await app.news(a.lang || 'en', one ? [one] : undefined);
-      const seen = new Set();
-      return { headlines: n.items.filter(i => !seen.has(i.link) && seen.add(i.link)).slice(0, Number(a.limit) || 20)
-                 .map(i => ({ stock: i.name, title: i.title, source: i.source, at: i.at, link: i.link })),
-               errors: n.errors };
+      const seen = new Set(), story = new Map();
+      for (const i of n.items.filter(i => !seen.has(i.link) && seen.add(i.link))) {
+        const g = story.get(i.story);
+        if (g) g.alsoIn.push(i.source);
+        else story.set(i.story, { stock: i.name, title: i.title, source: i.source, at: i.at, link: i.link, alsoIn: [] });
+      }
+      return { headlines: [...story.values()].slice(0, Number(a.limit) || 20), errors: n.errors };
     },
   },
   {
@@ -252,7 +333,7 @@ const TOOLS = [
   },
   {
     name: 'search_instrument',
-    description: 'Find a stock, ETF or crypto by name or ISIN (onvista). Returns names, ISINs and types.',
+    description: 'Find a stock, ETF or crypto by name, ISIN or US ticker (onvista, Nasdaq for tickers). Returns names, ISINs and types.',
     inputSchema: { type: 'object', required: ['query'], properties: { query: { type: 'string' } } },
     async run(a) { return { results: (await app.search(a.query)).slice(0, 10).map(h => ({ name: h.name, isin: h.isin, type: h.type, key: h.key })) }; },
   },

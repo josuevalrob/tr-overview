@@ -20,6 +20,11 @@
  *   DELETE /api/watchlist/<key>
  *   GET    /api/intraday                               today's recorded line (records a fresh point)
  *   GET    /api/analysis/<key>                         financials, analysts, events, dividends
+ *   GET    /api/research/<key>?amount=5000             read-out, news, what buying that many € does to the depot
+ *   GET    /api/kpis/<isin>                            company numbers (data/kpis/<isin>.json) with your lines
+ *   PUT    /api/kpis/<isin>      {file}                replace them
+ *   PUT    /api/kpi-lines/<isin> {lines}               your green / red lines (data/kpi-lines.json)
+ *   GET    /api/search?q=SE                            name, ISIN or US ticker -> instruments
  *   GET    /api/history/<key>?from=YYYY-MM-DD          daily closes (EUR) for the price chart
  */
 import http from 'node:http';
@@ -66,6 +71,14 @@ async function api(req, url) {
     return app.news(body.lang ?? url.searchParams.get('lang'), body.subjects);
   }
   if (req.method === 'GET' && part[0] === 'analysis' && part[1]) return app.analysis(decodeURIComponent(part[1]));
+  if (req.method === 'GET' && part[0] === 'research' && part[1]) return app.research(decodeURIComponent(part[1]), Number(url.searchParams.get('amount')) || 0);
+  if (part[0] === 'kpis' && part[1]) {
+    const key = decodeURIComponent(part[1]);
+    if (req.method === 'GET') return app.kpis.get(key, url.searchParams.get('next') || undefined);
+    if (req.method === 'PUT') return app.kpis.save(key, { file: (await readJson(req)).file });
+  }
+  if (req.method === 'PUT' && part[0] === 'kpi-lines' && part[1]) return app.kpis.lines(decodeURIComponent(part[1]), (await readJson(req)).lines);
+  if (req.method === 'GET' && part[0] === 'search') return { results: (await app.search(url.searchParams.get('q') || '')).slice(0, 8) };
   if (req.method === 'GET' && part[0] === 'history' && part[1]) return app.history(decodeURIComponent(part[1]), url.searchParams.get('from'));
   if (part[0] === 'watchlist') {
     if (req.method === 'GET') return { items: await app.watchlist.list() };
@@ -80,6 +93,11 @@ const server = http.createServer(async (req, res) => {
   const json = (code, o) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
   try {
     if (url.pathname.startsWith('/api/')) return json(200, await api(req, url));
+    // the page loads these two too (no imports): the "if you buy" slider and the company numbers' formats
+    if (req.method === 'GET' && ['/lib/research.mjs', '/lib/kpis.mjs'].includes(url.pathname)) {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' });
+      return res.end(fs.readFileSync(path.join(HERE, url.pathname)));
+    }
     if (req.method === 'GET') {
       const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
       const f = path.join(PUB, path.normalize(rel));

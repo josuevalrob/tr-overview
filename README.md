@@ -5,10 +5,11 @@ your own machine, keep your data there. No account login, no database, no depend
 
 | Tab | |
 |---|---|
-| **Today** | every open position at the live LS Exchange price: today's move, value, paid, gain, weight; stocks + crypto over time (1W–All) beside today's line against yesterday's close; today's move by position (contribution in points, adding up to the total) beside allocation by position, sector, country |
-| **Months** | what the account earned so far, stocks value vs cost, what each month earned, a month-by-month table |
+| **Today** | every open position at the live LS Exchange price: today's move, value, paid, gain, weight; stocks + crypto over time (1W–All) beside today's line against yesterday's close; today's move by position (contribution in points, adding up to the total) beside allocation by position, sector, country (bars or pie) |
+| **Months** | return per year (money-weighted, everything or stocks only), what the account earned so far, stocks value vs cost, what each month earned, a month-by-month table |
 | **Taxes** | the Sparer-Pauschbetrag used per year, an estimate to 31 Dec, "if you sold everything today", stock sales (FIFO), crypto holding periods |
-| **News** | Google News headlines (English / German) for every holding, plus any stock you choose to follow |
+| **News** | Google News headlines (English / German) for every holding, plus any stock you choose to follow; share of headlines per stock, biggest stories, similar headlines grouped |
+| **Research** | any stock by name, ISIN or US ticker (`SE`): a read-out made from its numbers by fixed rules - price vs 52 weeks, trend (50- / 200-day average, this year, volume), beta, growth, profit, returns (ROE, ROA, margins), cash flow (free cash flow, buybacks), balance sheet (net cash, current ratio, debt/equity), valuation (P/E on last year and on estimates, P/S, P/B, PEG, expected EPS growth), three investors' tests - **Graham** (Graham number √(22,5 × EPS × book value a share) + his defensive checks), **Buffett** (ROE, gross margin, debt vs profit, steady profit and free cash flow - he published no formula, so the checks commonly drawn from his letters), **Lynch** ((growth + dividend yield) ÷ P/E: under 1 poor, 1,5 okay, 2 what he looked for), **Ackman** (Pershing Square's measurable criteria: free cash flow every year, revenue up every year, operating margin, debt vs free cash flow, free-cash-flow yield), analysts, insiders (sales / buys, trading plans), short interest, funds (13F holders added / cut), next results, what this week's headlines are about, dividend, listing currency - in five groups (Price · Business · Valuation · Who's buying · Good to know), one headline number per row and the full sentence (and an investor's ✓ / ✗ checks) on click, each green / red / grey with its rule under "?"; a slider from 0 to your cash for what a buy does to the depot - weight, largest position, share in US dollars, and the share by position, sector or country (toggle) before → after, live while you drag; the track turns red where the stock passes 25 % of the depot; this week's stories. **Company numbers**: what the company reports in its own quarterly results and no feed has (Sea: Shopee GMV, take rate, loan book, NPL…), last 4 quarters with the change on a year before, your own green / red lines, "update due" once newer results are out; beside it a small bar chart per number over every saved quarter. Researching a stock follows it, so it shows in News too |
 | **Analysis** (click a position) | sidebar: price chart (1M–5Y) with your buys and sells marked, 52-week range, financials (annual since ~2016 + EPS/dividend estimates; quarterly for US shares), analysts' buy/hold/sell and price targets, next earnings date, dividends |
 
 ## Run it
@@ -35,13 +36,15 @@ claude mcp add tr-overview -- node /absolute/path/to/tr-overview/mcp.mjs
 
 | Tool | |
 |---|---|
-| `overview` | value, paid, gain, today's move, cash, total, export freshness — start here |
+| `overview` | value, paid, gain, today's move, cash, total, return per year, export freshness — start here |
 | `positions` | every position with live price, today, value, gain € / %, weight, sector, country |
 | `performance` | result over 1W / 1M / YTD / 1Y / All, optionally the daily series |
 | `today_intraday` | today's recorded line against yesterday's close |
-| `months` | month-by-month table |
+| `months` | month-by-month table, return per year |
 | `taxes` | Sparer-Pauschbetrag for a year, estimate to 31 Dec, sell-all scenario, sales, crypto (joint / church tax options) |
 | `stock_analysis` | financials, analysts, events, dividends + your position and trades — stock by name or ISIN |
+| `company_numbers` | read or add a company's own quarterly figures (data/kpis/), set your green / red lines |
+| `research` | the Research tab for one stock, optionally with an amount in € to buy - start here to talk about a stock |
 | `price_history` | daily closes with your buys and sells |
 | `news` | headlines for holdings, followed stocks, or one stock |
 | `watchlist` | list / add / remove followed stocks |
@@ -67,7 +70,8 @@ The monthly *Account statement* is a PDF with net amounts only (no fee, no tax) 
 - `data/` is in `.gitignore`, as is every `*.csv` except the made-up `public/sample.csv` — your
   transactions can never end up in a commit.
 - The server listens on `127.0.0.1` only. What leaves your machine: price requests to onvista (by
-  ISIN) and news searches to Google News (by company name). Never your transactions.
+  ISIN), company data requests to Nasdaq and FINRA (by US ticker, US-listed shares only) and news
+  searches to Google News (by company name). Never your transactions.
 - `data/intraday.json`: today's depot value, recorded every minute while the page is open and every 5
   minutes otherwise (onvista does not serve intraday charts to scripts). Started fresh each day; the line
   covers only the hours the server ran.
@@ -79,12 +83,27 @@ The monthly *Account statement* is a PDF with net amounts only (no fee, no tax) 
   Trade Republic trades on, so prices match the app. Only EUR quotes are used. Unofficial: if it
   changes, the page says which instrument has no price instead of guessing.
 - **Analysis:** onvista figures (all stocks; revenue derived as EBITDA ÷ EBITDA margin, net income as
-  revenue × net margin) and Nasdaq's public API for US-listed shares only — analysts, price targets,
-  earnings dates, quarterly results, dividend payments. Non-US tickers are never sent to Nasdaq, since
-  the same symbol can be another company there. Trade Republic's derivatives long/short ratio is its own
+  revenue × net margin; return on equity, equity ratio, P/B, P/CF, PEG, beta against its benchmark index,
+  volatility) and Nasdaq's public API for US-listed shares only — analysts, price targets,
+  earnings dates, quarterly results, fiscal years as reported with balance sheet and cash flow (onvista can
+  lag: Sea Limited ends in 2023 there), market value, volume, EPS consensus, PEG, dividend payments,
+  insider trades (3 / 12 months), institutional holders (13F). Short interest: FINRA's public API (no key),
+  twice a month, US-listed shares only. Non-US tickers are never sent to Nasdaq, since
+  the same symbol can be another company there. A ticker typed in capitals ("SE") is looked up on Nasdaq
+  for its company name, then searched on onvista. Trade Republic's derivatives long/short ratio is its own
   customer data and is not public.
-- **News:** Google News RSS, searched by the company name from the export, last 7 days. A plain
-  keyword search — generic names can pull in unrelated headlines.
+- **News:** Google News RSS, searched by the company name from the export, last 7 days, one query
+  per day (Google lists at most 100 per query; a busy stock still hits that, shown as "+"). A plain
+  keyword search — generic names can pull in unrelated headlines. Headlines are grouped into stories
+  without a model: same stock, within two days, sharing their rare words (tf-idf cosine).
+
+## Company numbers
+
+What a company reports in its own quarterly results and no free feed has (GMV, loan book, ...). They are
+data, so they live in `data/kpis/<ISIN>.json`, git-ignored like everything in `data/`: add them in the
+Research tab (Edit) or let an agent do it through the MCP tool `company_numbers`. Each quarter keeps the
+values as printed in the release, its link (`source`) and date (`reported`); optional `changes` hold the
+year-on-year change the release states, since releases round. Your green / red lines: `data/kpi-lines.json`.
 
 ## How the numbers are made
 
@@ -115,6 +134,8 @@ lib/portfolio.mjs   merge exports, FIFO lots, positions, months, tax
 lib/market.mjs      onvista: ISIN -> LS Exchange quote, daily closes
 lib/news.mjs        Google News RSS
 lib/analysis.mjs    per-stock analysis: onvista figures + Nasdaq (US only)
+lib/kpis.mjs        company numbers (data/kpis/): validate, merge, last 4 quarters + change, lines
+lib/research.mjs    the Research read-out and "if you buy": fixed rules over the analysis, prices, news
 lib/csv.mjs         CSV parsing, euro -> cents
 public/index.html   the page - no build step, no framework
 public/sample.csv   made-up transactions for the demo
