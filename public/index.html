@@ -185,7 +185,12 @@
   .pie .alloc{flex:1;min-width:200px;grid-template-columns:10px minmax(0,1fr) auto}
   .pie .sw{width:10px;height:10px;border-radius:3px}
   .pie .lbl small{display:block;color:var(--muted);font-size:11.5px;white-space:normal}
-  #r-sec .alloc{max-width:460px}
+  .rings{display:grid;grid-template-columns:1fr 1fr;gap:18px 28px}
+  .rings h3,.gl h3{margin:0 0 10px;font-size:13px}
+  .gl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px 28px}
+  .gl .tiles{margin:0 0 12px;grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
+  .gl .tile .v{font-size:18px}
+  @media (max-width:900px){ .rings,.gl{grid-template-columns:1fr} }
   .ctrls{display:flex;gap:8px;flex-wrap:wrap}
   .contrib{display:grid;grid-template-columns:minmax(90px,170px) 1fr auto;gap:8px 12px;align-items:center;font-size:13px}
   .contrib .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
@@ -1504,6 +1509,90 @@ async function openResearch(key) {
     R.data = d; renderResearch();
   } catch (e) { if (seq === R.seq) $('#r-body').innerHTML = `<div class="card"><p class="down" style="margin:0">${esc(e.message)}</p></div>`; }
 }
+/** A fund's sectors or countries as a ring; what the issuer leaves unclassified is its own slice. */
+function fundRing(host, parts, [one, many]) {
+  const list = parts.map(s => ({ k: s.name, v: s.pct })), sum = list.reduce((s, x) => s + x.v, 0);
+  if (sum < 99.5) list.push({ k: 'Not classified', v: 100 - sum });   // cash, or what the issuer leaves out
+  list.sort((a, b) => b.v - a.v);
+  const share = v => `${nf(0, v < 10 ? 1 : 0).format(v)} %`;
+  donut(host, list, { total: Math.max(100, sum), big: parts.length, small: parts.length === 1 ? one : many, share, rest: true,
+    tip: (x, color) => tipRow('Share', share(x.v), color) + (x.sub ?? []).map(s => tipRow(s.k, share(s.v))).join('') });
+}
+const signed0 = v => `${v > 0 ? '+' : v < 0 ? '−' : ''}${N0.format(Math.abs(v))} %`;
+/** Each calendar year's change as a column from zero with its % on it; the year so far lighter, starred. */
+function yearBars(host, years) {
+  const vals = years.map(y => y.pct), hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
+  const W = Math.max(260, host.clientWidth), H = 250, m = { l: 8, r: 8, t: 22, b: lo < 0 ? 44 : 26 };
+  const y = v => m.t + (H - m.t - m.b) * ((hi - v) / (hi - lo || 1));
+  const n = years.length, band = (W - m.l - m.r) / n, bw = Math.min(36, band * 0.62);
+  let g = '';
+  years.forEach((yr, i) => {
+    const x0 = m.l + i * band + (band - bw) / 2, y0 = y(0), y1 = y(yr.pct), h = Math.abs(y1 - y0), up = yr.pct >= 0;
+    if (h >= 0.5) {
+      const r = Math.min(4, h, bw / 2), s = up ? 1 : -1;
+      g += `<path d="M${x0},${y0}V${y1 + s * r}Q${x0},${y1} ${x0 + r},${y1}H${x0 + bw - r}Q${x0 + bw},${y1} ${x0 + bw},${y1 + s * r}V${y0}Z" fill="var(${up ? '--pos' : '--neg'})"${yr.partial ? ' fill-opacity=".5"' : ''}/>`;
+    }
+    g += `<text class="end" x="${x0 + bw / 2}" y="${up ? y1 - 6 : y1 + 14}" text-anchor="middle">${signed0(yr.pct)}</text>`;
+    g += `<text x="${x0 + bw / 2}" y="${H - 6}" text-anchor="middle">${esc(yr.year)}${yr.partial ? '*' : ''}</text>`;
+    g += `<rect data-i="${i}" x="${m.l + i * band}" y="0" width="${band}" height="${H}" fill="transparent"/>`;
+  });
+  g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--axis)" stroke-width="1"/>`;
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(years.map(y => `${y.year} ${signed0(y.pct)}`).join(', '))}">${g}</svg>`;
+  host.querySelectorAll('rect[data-i]').forEach(el => {
+    const yr = years[el.dataset.i];
+    el.onpointermove = ev => showTip(ev, `<div class="t">${esc(yr.year)}${yr.partial ? ', so far' : ''}</div>`
+      + tipRow('Change', pct(yr.pct), `var(${yr.pct >= 0 ? '--pos' : '--neg'})`) + tipRow('1.000 € became', eur0((1000 + yr.pct * 10) * 100)));
+    el.onpointerleave = hideTip;
+  });
+}
+/** The hold picked (1, 3 or 5 years): four tiles and what 1.000 € became for every day bought. */
+function drawHold() {
+  const H = R.data.holds, want = Number(store.get('tro.rhold', '1'));
+  const s = H.spans.find(x => x.years === want) ?? H.spans[0];
+  document.querySelectorAll('#r-hold button').forEach(b => {
+    b.setAttribute('aria-pressed', String(Number(b.dataset.y) === s.years));
+    b.onclick = () => { store.set('tro.rhold', b.dataset.y); drawHold(); };
+  });
+  const e = x => eur0(x * 100000);                       // 1 € became x: on 1.000 €, in cents
+  $('#r-holdt').innerHTML = [
+    ['Ended with a gain', `${N0.format(Math.floor(s.up))} %`, `of ${N0.format(s.n)} days bought`, ''],
+    ['Worst', e(s.worst), `bought ${day(s.worstOn)}`, dir(s.worst - 1)],
+    ['Middle', e(s.mid), 'half did better', dir(s.mid - 1)],
+    ['Best', e(s.best), `bought ${day(s.bestOn)}`, dir(s.best - 1)],
+  ].map(([k, v, sub, cls]) => `<div class="tile"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="s">${esc(sub)}</div></div>`).join('');
+  holdChart($('#r-holdc'), s);
+}
+/** A histogram of what 1.000 € became: red bins under what went in, blue over, a dashed line at 1.000 €. */
+function holdChart(host, s) {
+  const W = Math.max(260, host.clientWidth), H = 170, m = { l: 20, r: 20, t: 20, b: 24 };
+  const B = s.bins, n = B.length, top = Math.max(...B.map(b => b.n)) || 1;
+  const band = (W - m.l - m.r) / n, gap = Math.min(2, band * 0.2);
+  const x = v => m.l + (v - B[0].lo) / s.step * band, y = c => m.t + (H - m.t - m.b) * (1 - c / top);
+  let g = '';
+  B.forEach((b, i) => {
+    const x0 = m.l + i * band + gap / 2, w = band - gap, y1 = y(b.n), h = H - m.b - y1;
+    if (b.n && h >= 0.5) {
+      const r = Math.min(3, h, w / 2);
+      g += `<path d="M${x0},${H - m.b}V${y1 + r}Q${x0},${y1} ${x0 + r},${y1}H${x0 + w - r}Q${x0 + w},${y1} ${x0 + w},${y1 + r}V${H - m.b}Z" fill="var(${b.lo >= 1 ? '--pos' : '--neg'})"/>`;
+    }
+    g += `<rect data-i="${i}" x="${m.l + i * band}" y="${m.t}" width="${band}" height="${H - m.t - m.b}" fill="transparent"/>`;
+  });
+  g += `<line x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}" stroke="var(--axis)" stroke-width="1"/>`;
+  const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((W - m.l - m.r) / 64))));
+  for (let i = 0; i <= n; i += every) g += `<text x="${x(B[0].lo + i * s.step)}" y="${H - 6}" text-anchor="middle">${N0.format((B[0].lo + i * s.step) * 1000)} €</text>`;
+  if (B[0].lo <= 1 && 1 <= B.at(-1).lo + s.step) {          // what went in, when the range reaches it
+    const x1 = x(1), at = x1 < 50 ? 'start' : x1 > W - 50 ? 'end' : 'middle';
+    g += `<line x1="${x1}" x2="${x1}" y1="${m.t - 4}" y2="${H - m.b}" stroke="var(--ink2)" stroke-width="1" stroke-dasharray="3 3"/>`
+      + `<text class="end" x="${x1}" y="${m.t - 8}" text-anchor="${at}">1.000 € in</text>`;
+  }
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Held ${s.years} year${s.years > 1 ? 's' : ''}: a gain on ${N0.format(Math.floor(s.up))} % of ${s.n} days">${g}</svg>`;
+  host.querySelectorAll('rect[data-i]').forEach(el => {
+    const b = B[el.dataset.i];
+    el.onpointermove = ev => showTip(ev, `<div class="t">${N0.format(b.lo * 1000)} – ${N0.format((b.lo + s.step) * 1000)} €</div>`
+      + tipRow('Days bought', `${N0.format(b.n)} (${N0.format(b.n / s.n * 100)} %)`, `var(${b.lo >= 1 ? '--pos' : '--neg'})`));
+    el.onpointerleave = hideTip;
+  });
+}
 function renderResearch() {
   const d = R.data, pr = d.profile, q = d.quote;
   const dayPct = q?.prev ? (q.last / q.prev - 1) * 100 : null;
@@ -1562,11 +1651,21 @@ function renderResearch() {
     ${other.length ? `<details class="also" style="margin-top:8px"><summary class="muted" style="font-size:12.5px;cursor:pointer">${other.length} more that only mention it</summary><ul class="news">${other.slice(0, 30).map(li).join('')}</ul></details>` : ''}
     ${d.errors.length ? `<p class="down">${d.errors.map(esc).join('<br>')}</p>` : ''}</div>`;
 
-  // a fund: what it holds by sector, as a ring
-  const F = d.fund, secs = F?.sectors?.length ? F.sectors : null;
-  const sectors = secs ? `<div class="card"><h2>Sectors</h2>
-    <p class="sub">What the fund holds, by sector${F.asOf ? ` - as the issuer reports it, to ${esc(day(F.asOf))}` : ''}.</p>
-    <div id="r-sec"></div></div>` : '';
+  // a fund: what it holds by sector and country, as rings; how it gained and lost
+  const F = d.fund, secs = F?.sectors?.length ? F.sectors : null, ctys = F?.countries?.length ? F.countries : null;
+  const sectors = secs || ctys ? `<div class="card"><h2>What it holds</h2>
+    <p class="sub">By sector and by country${F.asOf ? ` - as the issuer reports it, to ${esc(day(F.asOf))}` : ''}.</p>
+    <div class="rings">${secs ? '<div><h3>Sectors</h3><div id="r-sec"></div></div>' : ''}${ctys ? '<div><h3>Countries</h3><div id="r-cty"></div></div>' : ''}</div></div>` : '';
+  const H = d.holds, gains = F && H?.spans.length ? `<div class="card"><h2>Gains &amp; losses</h2>
+    <p class="sub">From every day's price since ${esc(day(H.from))}, payouts put back in. Past prices, not a forecast.</p>
+    <div class="gl">
+      <div><h3>Year by year</h3><div class="chart" id="r-years"></div></div>
+      <div><div class="row" style="margin-bottom:10px"><h3 style="margin:0">Bought on any day, held</h3>
+          <div class="seg" id="r-hold">${H.spans.map(s => `<button data-y="${s.years}">${s.years} year${s.years > 1 ? 's' : ''}</button>`).join('')}</div></div>
+        <div class="tiles" id="r-holdt"></div>
+        <div class="chart" id="r-holdc"></div></div>
+    </div>
+    <p class="note">What 1.000 € became, for every day it could have been bought: red below what went in, blue above. Hover a bar for its days.${H.years.some(y => y.partial) ? ' * The year so far.' : ''}${H.missed ? ` ${H.missed} payout${H.missed > 1 ? 's' : ''} in a currency without a rate left out.` : ''}</p></div>` : '';
 
   const pe = d.pe ? `<div class="card"><h2>Price / earnings over time</h2>
     <p class="sub">What a year of profit costs: price ÷ the earnings per share reported, ${d.pe.now != null ? `now <b>${N0.format(d.pe.now)}×</b>` : 'now over 100×'}, in the middle since ${esc(day(d.pe.since))} <b>${N0.format(d.pe.median)}×</b>.
@@ -1574,17 +1673,12 @@ function renderResearch() {
       ${d.pe.now != null && d.pe.now < d.pe.median ? 'Low against its own past: cheap, or the market expects less profit ahead.' : 'High against its own past: expensive, or the market expects more profit ahead.'}</p>
     <div class="chart" id="r-pe"></div>
     <p class="note">${d.isin?.startsWith('US') ? `Net income per year from onvista${d.pe.nasdaq?.length ? ` (${esc(d.pe.nasdaq.join(', '))} from Nasdaq, in euros at today's rate)` : ''} ÷ today's share count` : 'Earnings per share per year from onvista'}, blended between year ends (about the last twelve months); after ${esc(d.pe.basis)} it stays at ${esc(d.pe.basis)}. No line in or just after a loss year, or above 100×.</p></div>` : '';
-  $('#r-body').innerHTML = head + sectors + pe + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div>' : '')
+  $('#r-body').innerHTML = head + sectors + gains + pe + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div>' : '')
     + `<div class="pair">${fit}${news}</div>`;
   $('#r-more').onclick = () => openAnalysis(d.key);
-  if (secs) {
-    const list = secs.map(s => ({ k: s.name, v: s.pct })), sum = list.reduce((s, x) => s + x.v, 0);
-    if (sum < 99.5) list.push({ k: 'Not classified', v: 100 - sum });   // cash, or what the issuer leaves out
-    list.sort((a, b) => b.v - a.v);
-    const share = v => `${nf(0, v < 10 ? 1 : 0).format(v)} %`;
-    donut($('#r-sec'), list, { total: Math.max(100, sum), big: secs.length, small: secs.length === 1 ? 'sector' : 'sectors', share, rest: true,
-      tip: (x, color) => tipRow('Share', share(x.v), color) + (x.sub ?? []).map(s => tipRow(s.k, share(s.v))).join('') });
-  }
+  if (secs) fundRing($('#r-sec'), secs, ['sector', 'sectors']);
+  if (ctys) fundRing($('#r-cty'), ctys, ['country', 'countries']);
+  if (gains) { yearBars($('#r-years'), H.years); drawHold(); }
   const fb = $('#r-follow');
   if (fb) fb.onclick = async () => {
     fb.disabled = true;
