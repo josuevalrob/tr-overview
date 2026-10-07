@@ -1458,8 +1458,8 @@ function renderResearch() {
 
   const pe = d.pe ? `<div class="card"><h2>Price / earnings over time</h2>
     <p class="sub">What a year of profit costs: market value ÷ net income, ${d.pe.now != null ? `now <b>${N0.format(d.pe.now)}×</b>` : 'now over 100×'}, in the middle since ${esc(day(d.pe.since))} <b>${N0.format(d.pe.median)}×</b>.
-      Low against its own past: cheap, or the market expects less profit ahead.</p>
-    <div id="r-pe"></div>
+      ${d.pe.now != null && d.pe.now < d.pe.median ? 'Low against its own past: cheap, or the market expects less profit ahead.' : 'High against its own past: expensive, or the market expects more profit ahead.'}</p>
+    <div class="chart" id="r-pe"></div>
     <p class="note">Net income per year from onvista, blended between year ends (about the last twelve months); after ${esc(d.pe.basis)} it stays at ${esc(d.pe.basis)}. Today's share count throughout. No line in or just after a loss year, or above 100×.</p></div>` : '';
   $('#r-body').innerHTML = head + pe + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div>' : '')
     + `<div class="pair">${fit}${news}</div>`;
