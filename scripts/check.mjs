@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mergeExports, replay, holdings, taxYear, taxSettings, months, xirr, annualReturns } from '../lib/portfolio.mjs';
+import { mergeExports, replay, holdings, taxYear, taxSettings, months, xirr, annualReturns, homeCurrency, currencySplit } from '../lib/portfolio.mjs';
 import { stories, newsNames } from '../lib/news.mjs';
 import { readout, themes } from '../lib/research.mjs';
 import * as K from '../lib/kpis.mjs';
@@ -286,6 +286,25 @@ check('research: Nasdaq\'s last year lags onvista\'s - the newer one counts', ()
   assert.deepEqual(pt.Ackman.checks.map(c => c.ok), [null, false, true, null, null]);
   assert.equal(pt.Ackman.tone, 'neutral');
   assert.match(pt.Ackman.text, /too few to judge/);
+});
+
+check('gain since bought splits into the price and the currency, adding up to the gain', () => {
+  assert.deepEqual(['US0231351067', 'CA64046G1063', 'DE0007164600', 'BTC'].map(homeCurrency), ['USD', 'CAD', 'EUR', null]);
+  // two lots of 100 €: at 1,10 $ and 1,00 $ per €, now 1,25 - the dollar fell, it cost money
+  const fx = { USD: [['2025-01-02', 1.10], ['2025-06-02', 1.00], ['2026-10-06', 1.25]] };
+  const lots = [{ date: '2025-01-04', shares: 1, cost: 10000 }, { date: '2025-06-02', shares: 1, cost: 10000 }];   // a Saturday: Thursday's rate
+  const [us, de, btc, none] = currencySplit([
+    { key: 'US0000000001', shares: 2, value: 30000, cost: 20000, gain: 10000, lots },
+    { key: 'DE0000000001', shares: 2, value: 30000, cost: 20000, gain: 10000, lots },
+    { key: 'BTC', shares: 2, value: 15000, cost: 20000, gain: -5000, lots },
+    { key: 'US0000000002', value: null }], fx);
+  assert.equal(us.fromCurrency, Math.round(15000 * (1 - 1.25 / 1.10) + 15000 * (1 - 1.25)));   // −5.795
+  assert.equal(us.fromPrice + us.fromCurrency, 10000);
+  assert.equal(us.fxThen.toFixed(4), '1.0500');                         // weighted by cost
+  assert.equal(us.fxMove.toFixed(1), '-16.0');                          // 1,05 / 1,25 − 1
+  assert.deepEqual([de.fromPrice, de.fromCurrency, btc.fromPrice, btc.fromCurrency], [10000, 0, -5000, 0]);
+  assert.equal(none.fromPrice, undefined);                              // no price, no split
+  assert.equal(currencySplit([{ key: 'US0000000001', shares: 2, value: 30000, cost: 20000, gain: 10000, lots }], null)[0].fromCurrency, 0);
 });
 
 check('company numbers: change on a year before, as reported when given; lines judge growth or level', () => {

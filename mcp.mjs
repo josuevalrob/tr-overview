@@ -49,6 +49,8 @@ const position = (p, profiles) => ({
   shares: p.shares, price: p.last ?? null, price_time: p.at ?? null, venue: p.venue ?? null,
   today_pct: r2(p.dayPct), today_eur: e(p.day), value: e(p.value), paid: e(p.cost),
   gain_eur: e(p.gain), gain_pct: r2(p.gainPct), weight_pct: r2(p.weight),
+  ...(p.fromPrice != null ? { gain_split: { currency: p.home ?? null, from_price_eur: e(p.fromPrice), from_currency_eur: e(p.fromCurrency),
+    ...(p.fxMove != null ? { currency_vs_eur_since_bought_pct: r2(p.fxMove), rate_paid_at: Number(p.fxThen.toFixed(4)), rate_now: p.fxNow, rate_date: p.fxAsOf } : {}) } } : {}),
   ...(p.error ? { error: p.error } : {}),
 });
 
@@ -84,6 +86,7 @@ const TOOLS = [
         ...(stale > 10 ? { warning: `The export ends ${d.asOf}: trades, deposits and interest since then are missing.` } : {}),
         stocks_and_crypto: { value: e(d.value), paid: e(d.cost), gain_eur: e(d.value - d.cost),
                              gain_pct: r2(d.cost ? (d.value / d.cost - 1) * 100 : null),
+                             gain_from_currency_eur: e(d.positions.reduce((s, p) => s + (p.fromCurrency ?? 0), 0)),
                              today_eur: e(d.day), today_pct: r2(d.dayPct) },
         cash: e(d.cash), total: e(d.cash + d.value), paid_in: e(d.paidIn),
         return_per_year: perYear(d.annual),
@@ -95,7 +98,7 @@ const TOOLS = [
   },
   {
     name: 'positions',
-    description: 'Every open position at the live LS Exchange price (EUR): shares, price, today\'s move, its contribution to the depot\'s move today (percentage points, adding up to the total), value, paid, gain since bought (€ and %), weight, sector, country.',
+    description: 'Every open position at the live LS Exchange price (EUR): shares, price, today\'s move, its contribution to the depot\'s move today (percentage points, adding up to the total), value, paid, gain since bought (€ and %), weight, sector, country. gain_split: the gain in two parts that add up to it - the price in its own currency, and that currency against the euro (ECB rate on each buy day vs the latest; rates per 1 €). Euro shares and crypto: all price.',
     inputSchema: { type: 'object', properties: {} },
     async run() {
       const d = await app.summary({});

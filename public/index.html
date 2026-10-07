@@ -198,6 +198,11 @@
   .contrib .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   .contrib .num small{color:var(--muted);margin-left:8px}
   .contrib .total{border-top:1px solid var(--line);padding-top:8px;font-weight:600}
+  .fxs .dv i + i{margin-left:2px}
+  .fxs .dv .fp{background:var(--s1)} .fxs .dv .fc{background:var(--s2)}
+  .fxs .dv > span:first-child i:first-child{border-radius:4px 0 0 4px}
+  .fxs .dv > span:last-child i:last-child{border-radius:0 4px 4px 0}
+  .legend i.sq{width:10px;height:10px;border-radius:3px}
   .pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
   .pair > .card{margin-bottom:0;min-width:0}
   @media (max-width:900px){ .pair{grid-template-columns:1fr} }
@@ -608,6 +613,12 @@ function renderToday() {
         <tbody>${rows}</tbody>
         <tfoot><tr><td>Total</td><td></td><td></td><td>${move(d.day, d.dayPct)}<span class="small">${signed(d.day)}</span></td><td>${eur(d.value)}</td><td>${eur(d.cost)}</td><td class="gain">${gainCell(d.value - d.cost, d.cost ? (d.value / d.cost - 1) * 100 : null)}</td><td></td></tr></tfoot>
       </table></div>
+    </div>
+    <div class="card">
+      <h2>Gain since bought: the price or the currency?</h2>
+      <p class="sub" id="fx-note"></p>
+      <div class="legend"><span><i class="sq" style="background:var(--s1)"></i>Price, in its own currency</span><span><i class="sq" style="background:var(--s2)"></i>That currency against the euro</span></div>
+      <div class="contrib fxs" id="fxsplit"></div>
     </div>`;
   el.insertAdjacentHTML('beforeend', `
     <div class="pair">
@@ -628,7 +639,7 @@ function renderToday() {
     ev.stopPropagation();                                // a gain cell switches € / %, it does not open the sidebar
     G.pct = !G.pct; store.set('tro.gainpct', G.pct ? '1' : ''); renderToday();
   });
-  renderDepotChart(); renderIntraday(); renderContrib(); renderAllocation();
+  renderDepotChart(); renderIntraday(); renderContrib(); renderAllocation(); renderCurrency();
 }
 
 // ------------------------------------------------------------ months
@@ -1164,6 +1175,56 @@ function renderContrib() {
     + (down && down.pp < 0 ? `Biggest drag: ${down.name} (${pp(down.pp)}). ` : '')
     + (up && up.pp > 0 ? `Biggest lift: ${up.name} (${pp(up.pp)}).` : '');
   host.querySelectorAll('.lbl[data-key]').forEach(l => l.onclick = () => openAnalysis(l.dataset.key));
+}
+
+/**
+ * Gain since bought, the price or the currency: per position two bars from the zero line - the
+ * price in its own currency (blue) and that currency against the euro (orange). Same sign: stacked,
+ * the price at the line; opposite signs: one each side. The number is the currency's part.
+ */
+const CUR = { USD: ['$', 'the US dollar'], GBP: ['£', 'the pound'], CAD: ['C$', 'the Canadian dollar'], CHF: ['CHF', 'the Swiss franc'], JPY: ['¥', 'the yen'] };
+const curSym = c => CUR[c]?.[0] ?? c, curName = c => CUR[c]?.[1] ?? c;
+function renderCurrency() {
+  const d = S.data, host = $('#fxsplit');
+  if (!host) return;
+  const rows = d.positions.filter(p => p.fromPrice != null).sort((a, b) => b.gain - a.gain);
+  if (!rows.length) { host.innerHTML = '<span class="muted">No prices yet.</span>'; $('#fx-note').textContent = ''; return; }
+  const side = (r, s) => [r.fromPrice, r.fromCurrency].filter(v => Math.sign(v) === s).reduce((t, v) => t + v, 0);
+  const max = Math.max(...rows.flatMap(r => [side(r, 1), -side(r, -1)])) || 1;
+  const seg = (v, cls) => v ? `<i class="${cls}" style="width:${(Math.abs(v) / max) * 100}%"></i>` : '';
+  const note = r => r.fxMove != null ? `${curSym(r.home)} ${pct(r.fxMove)} against €` : r.home === 'EUR' ? 'in euros' : r.home ? `${r.home}: no rate` : 'price only';
+  const totPrice = rows.reduce((s, r) => s + r.fromPrice, 0), totCur = rows.reduce((s, r) => s + r.fromCurrency, 0);
+  host.innerHTML = rows.map((r, i) => `<span class="lbl" data-i="${i}" title="${esc(r.name)}">${esc(r.name)}<small>${note(r)}</small></span>
+      <span class="dv" data-i="${i}">
+        <span>${r.fromCurrency < 0 ? seg(r.fromCurrency, 'fc') : ''}${r.fromPrice < 0 ? seg(r.fromPrice, 'fp') : ''}</span>
+        <span>${r.fromPrice > 0 ? seg(r.fromPrice, 'fp') : ''}${r.fromCurrency > 0 ? seg(r.fromCurrency, 'fc') : ''}</span></span>
+      <span class="num" data-i="${i}">${r.fxMove != null ? `<span class="${dir(r.fromCurrency)}">${signed(r.fromCurrency)}</span>` : '<span class="muted">–</span>'}<small>gain ${signed(r.gain)}</small></span>`).join('')
+    + `<span class="lbl total">Total</span><span class="total"></span>
+       <span class="num total"><span class="${dir(totCur)}">${signed(totCur)}</span><small>gain ${signed(totPrice + totCur)}</small></span>`;
+  // which currencies moved, and how much of the gain that was
+  const by = new Map();
+  for (const r of rows.filter(r => r.fxMove != null)) {
+    const c = by.get(r.home) ?? { cost: 0, paidAt: 0, now: r.fxNow, at: r.fxAsOf };
+    c.cost += r.cost; c.paidAt += r.fxThen * r.cost; by.set(r.home, c);
+  }
+  const moves = [...by].sort((a, b) => b[1].cost - a[1].cost)
+    .map(([c, x]) => `${curName(c)} ${pct((x.paidAt / x.cost / x.now - 1) * 100)}`);
+  const asOf = [...by.values()][0]?.at;
+  $('#fx-note').textContent = moves.length
+    ? `Since you bought, against the euro: ${moves.join(', ')}. Of your ${signed(totPrice + totCur)} gain, ${signed(totPrice)} came from prices and ${signed(totCur)} from currencies. `
+      + `Each buy at the ECB rate of its day, today at the rate of ${day(asOf)}. Number: the currency's part.`
+    : rows.some(r => r.home && r.home !== 'EUR') ? 'The ECB\'s exchange rates are unavailable right now: no split.'
+    : 'Every position is in euros or crypto: there is no currency part.';
+  host.querySelectorAll('[data-i]').forEach(el => {
+    const r = rows[el.dataset.i];
+    el.onpointermove = ev => showTip(ev, `<div class="t">${esc(r.name)}</div>`
+      + tipRow(`Price${r.fxMove != null ? `, in ${r.home}` : ''}`, signed(r.fromPrice), 'var(--s1)')
+      + (r.fxMove != null ? tipRow(`${curSym(r.home)} against €`, signed(r.fromCurrency), 'var(--s2)') : '')
+      + tipRow('Gain since bought', signed(r.gain))
+      + (r.fxMove != null ? tipRow(`${r.home} per €`, `${nf(4, 4).format(r.fxThen)} → ${nf(4, 4).format(r.fxNow)}`) : ''));
+    el.onpointerleave = hideTip;
+  });
+  host.querySelectorAll('.lbl[data-i]').forEach(l => l.onclick = () => openAnalysis(rows[l.dataset.i].key));
 }
 
 /**
