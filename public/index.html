@@ -885,7 +885,7 @@ function renderAnalysis() {
       ${e1 ? `<span>Employees (${esc(e1.label)})</span><span>${N0.format(e1.employees)}${e0 && e0 !== e1 ? ` <span class="muted">· ${esc(e0.label)}: ${N0.format(e0.employees)}</span>` : ''}</span>` : ''}
       ${pr.ceo ? `<span>CEO</span><span>${esc(pr.ceo.name)}${pr.ceo.payRatio ? ` <span class="muted">· paid ${N0.format(pr.ceo.payRatio)}× the median employee</span>` : ''}</span>` : ''}
       ${pr.wkn ? `<span>WKN · symbol</span><span>${esc(pr.wkn)}${pr.symbol ? ` · ${esc(pr.symbol)}` : ''}${us?.listedAs ? ` · US ${esc(us.listedAs)}` : ''}</span>` : ''}
-      ${d.splits?.length ? `<span>Splits, spin-offs</span><span>${d.splits.slice(0, 4).map(x => `${esc(day(x.date))} ${Math.abs(x.factor - Math.round(x.factor)) > 0.01 && x.factor < 2 ? 'spin-off / capital' : `split ${nf(0, 2).format(x.factor)}:1`}`).join('<br>')}</span>` : ''}
+      ${d.splits?.length ? `<span>Splits, spin-offs</span><span>${d.splits.slice(0, 4).map(x => `${esc(day(x.date))} ${[1, 2, 3, 4, 5, 10].some(b => Math.abs(x.factor * b - Math.round(x.factor * b)) < 0.002) ? `split ${nf(0, 2).format(x.factor)}:1` : 'spin-off / capital'}`).join('<br>')}</span>` : ''}
     </div></div>` : '';
   // every venue onvista lists, most traded first; the one the prices here come from marked
   const venue = pos?.venue ?? (w?.quote && !w.quote.error ? w.quote.venue : null);

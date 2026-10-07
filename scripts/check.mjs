@@ -239,12 +239,20 @@ check('research: home listings - estimates on another profit, next 12 months, di
   assert.equal(Math.round(r.stats.lynchGrowth), 20);                  // 3 -> 3,6: estimate to estimate
   assert.equal(r.stats.lynchRatio.toFixed(2), '2.10');                // (20 + 1) ÷ P/E 10 on 2026
   assert.equal(pt.Outlook.tone, 'good');
-  assert.deepEqual(pt.Dividend.checks.map(c => c.ok), [true, true, true]);   // 21 % paid out; the spin-off drop is no cut
+  assert.deepEqual(pt.Dividend.checks.map(c => c.ok), [true, true, true, null]);   // 21 % paid out; the spin-off drop is no cut
   assert.equal(pt.Dividend.tone, 'good');
   assert.equal(r.stats.interestCover, 7);                             // (120 + 20) ÷ 20
   assert.equal(pt['Balance sheet'].tone, 'good');                     // liabilities 1,4× equity, from 1,5×
   assert.equal(pt.Returns.head, 'ROE 20 %');
   assert.equal(Math.round(r.stats.earningsGrowthYearly * 10), 74);    // 0,7 € (2020) -> 1 € (2025)
+  // Yahoo's share count: a 3:2 split between 2024 and 2025 shows as a jump, another year already adjusted does not
+  const cashflow = { currency: 'USD', years: [{ year: '2023', end: '2023-12-31', free: 10, shares: 100 }, { year: '2024', end: '2024-12-31', free: 12, shares: 98 },
+                                             { year: '2025', end: '2025-12-31', free: 15, shares: 145.53, buybacks: -33.81 }] };
+  const y = readout({ an: { ...an, cashflow, splits: [{ date: '2025-10-10', factor: 1.5 }, { date: '2024-06-01', factor: 2 }] },
+                      closes: [], quote: { last: 30 }, today: '2026-10-07', rates: { fx: { EUR: 1, USD: 1.127 } } });
+  assert.equal(y.stats.sharesChangeYearly.toFixed(1), '-1.5');        // 150 -> 145,53 over 2 years
+  assert.equal(y.stats.buybackYield.toFixed(2), '1.00');              // 33,81 $ = 30 € of 3.000 €
+  assert.equal(y.points.find(p => p.topic === 'Cash flow').tone, 'good');
   const bank = readout({ an: { ...an, profile: { ...an.profile, kind: 'bank' } }, closes: [], quote: { last: 30 }, today: '2026-10-07' });
   assert.equal(bank.points.find(p => p.topic === 'Balance sheet').tone, 'neutral');
 });
