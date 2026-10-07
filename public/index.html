@@ -184,6 +184,8 @@
   .pie svg text.k{font-weight:400;font-size:11.5px;fill:var(--ink2)}
   .pie .alloc{flex:1;min-width:200px;grid-template-columns:10px minmax(0,1fr) auto}
   .pie .sw{width:10px;height:10px;border-radius:3px}
+  .pie .lbl small{display:block;color:var(--muted);font-size:11.5px;white-space:normal}
+  #r-sec .alloc{max-width:460px}
   .ctrls{display:flex;gap:8px;flex-wrap:wrap}
   .contrib{display:grid;grid-template-columns:minmax(90px,170px) 1fr auto;gap:8px 12px;align-items:center;font-size:13px}
   .contrib .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
@@ -1233,6 +1235,38 @@ function renderCurrency() {
  * into "Other". Colours go by size, in the palette's fixed order.
  */
 const PIE_MAX = 6;
+/**
+ * A ring with its legend. list: [{ k, v }] largest first; hues in fixed order, past PIE_MAX folded into a grey
+ * "Other (n)" (its members listed under it when `rest`). share(v) is the legend's value, more(v) small after it,
+ * tip(x, color) the hover rows.
+ */
+function donut(host, list, { total, big, small, share, more: extra, tip, rest = false }) {
+  const folded = list.slice(PIE_MAX - 1);
+  const slices = (list.length > PIE_MAX ? [...list.slice(0, PIE_MAX - 1), { k: `Other (${folded.length})`, v: folded.reduce((s, x) => s + x.v, 0), sub: folded }] : list)
+    .map((x, i) => ({ ...x, color: list.length > PIE_MAX && i === PIE_MAX - 1 ? 'var(--other)' : `var(--${i < 2 ? `s${i + 1}` : `c${i + 1}`})` }));
+  const R = 88, r = 56, c = 90, at = (rad, a) => `${(c + rad * Math.sin(a)).toFixed(2)},${(c - rad * Math.cos(a)).toFixed(2)}`;
+  let a0 = 0;
+  const arcs = slices.map((x, i) => {
+    const a1 = a0 + (x.v / total) * 2 * Math.PI, large = a1 - a0 > Math.PI ? 1 : 0;
+    const path = slices.length === 1                       // a full ring has no arc endpoints
+      ? `M${c},${c - R}A${R},${R} 0 1 1 ${c},${c + R}A${R},${R} 0 1 1 ${c},${c - R}M${c},${c - r}A${r},${r} 0 1 0 ${c},${c + r}A${r},${r} 0 1 0 ${c},${c - r}Z`
+      : `M${at(R, a0)}A${R},${R} 0 ${large} 1 ${at(R, a1)}L${at(r, a1)}A${r},${r} 0 ${large} 0 ${at(r, a0)}Z`;
+    a0 = a1;
+    return `<path data-i="${i}" d="${path}" fill="${x.color}" fill-rule="evenodd" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round"/>`;
+  }).join('');
+  host.innerHTML = `<div class="pie">
+    <svg viewBox="0 0 180 180" role="img" aria-label="${esc(slices.map(x => `${x.k} ${share(x.v)}`).join(', '))}">${arcs}
+      <text x="${c}" y="${c - 2}" text-anchor="middle">${big}</text>
+      <text class="k" x="${c}" y="${c + 15}" text-anchor="middle">${small}</text></svg>
+    <div class="alloc">${slices.map(x => `<span class="sw" style="background:${x.color}"></span>
+      <span class="lbl" title="${esc(x.k)}">${esc(x.k)}${rest && x.sub ? `<small>${x.sub.map(s => `${esc(s.k)} ${share(s.v)}`).join(' · ')}</small>` : ''}</span>
+      <span class="num">${share(x.v)}${extra ? `<small>${extra(x.v)}</small>` : ''}</span>`).join('')}</div></div>`;
+  host.querySelectorAll('path[data-i]').forEach(el => {
+    const x = slices[el.dataset.i];
+    el.onpointermove = ev => showTip(ev, `<div class="t">${esc(x.k)}</div>` + tip(x, x.color));
+    el.onpointerleave = hideTip;
+  });
+}
 function renderAllocation() {
   const d = S.data, host = $('#alloc');
   if (!host) return;
@@ -1246,31 +1280,8 @@ function renderAllocation() {
   const list = [...groups].sort((a, b) => b[1] - a[1]), top = list[0]?.[1] || 1;
   const share = v => `${N0.format(v / total * 100)} %`;
   if (D.allocView === 'pie') {
-    const rest = list.slice(PIE_MAX - 1);
-    const slices = (list.length > PIE_MAX ? [...list.slice(0, PIE_MAX - 1), [`Other (${rest.length})`, rest.reduce((s, x) => s + x[1], 0)]] : list)
-      .map(([k, v], i) => ({ k, v, color: list.length > PIE_MAX && i === PIE_MAX - 1 ? 'var(--other)' : `var(--${i < 2 ? `s${i + 1}` : `c${i + 1}`})` }));
-    const R = 88, r = 56, c = 90, at = (rad, a) => `${(c + rad * Math.sin(a)).toFixed(2)},${(c - rad * Math.cos(a)).toFixed(2)}`;
-    let a0 = 0;
-    const arcs = slices.map((x, i) => {
-      const a1 = a0 + (x.v / total) * 2 * Math.PI, big = a1 - a0 > Math.PI ? 1 : 0;
-      const path = slices.length === 1                       // a full ring has no arc endpoints
-        ? `M${c},${c - R}A${R},${R} 0 1 1 ${c},${c + R}A${R},${R} 0 1 1 ${c},${c - R}M${c},${c - r}A${r},${r} 0 1 0 ${c},${c + r}A${r},${r} 0 1 0 ${c},${c - r}Z`
-        : `M${at(R, a0)}A${R},${R} 0 ${big} 1 ${at(R, a1)}L${at(r, a1)}A${r},${r} 0 ${big} 0 ${at(r, a0)}Z`;
-      a0 = a1;
-      return `<path data-i="${i}" d="${path}" fill="${x.color}" fill-rule="evenodd" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round"/>`;
-    }).join('');
-    host.innerHTML = `<div class="pie">
-      <svg viewBox="0 0 180 180" role="img" aria-label="${esc(slices.map(x => `${x.k} ${share(x.v)}`).join(', '))}">${arcs}
-        <text x="${c}" y="${c - 2}" text-anchor="middle">${eur0(total)}</text>
-        <text class="k" x="${c}" y="${c + 15}" text-anchor="middle">stocks + crypto</text></svg>
-      <div class="alloc">${slices.map(x => `<span class="sw" style="background:${x.color}"></span>
-        <span class="lbl" title="${esc(x.k)}">${esc(x.k)}</span>
-        <span class="num">${share(x.v)}<small>${eur0(x.v)}</small></span>`).join('')}</div></div>`;
-    host.querySelectorAll('path[data-i]').forEach(el => {
-      const x = slices[el.dataset.i];
-      el.onpointermove = ev => showTip(ev, `<div class="t">${esc(x.k)}</div>` + tipRow('Share', share(x.v), x.color) + tipRow('Value', eur(x.v)));
-      el.onpointerleave = hideTip;
-    });
+    donut(host, list.map(([k, v]) => ({ k, v })), { total, big: eur0(total), small: 'stocks + crypto',
+      share, more: eur0, tip: (x, color) => tipRow('Share', share(x.v), color) + tipRow('Value', eur(x.v)) });
   } else {
     host.innerHTML = `<div class="alloc">${list.map(([k, v]) => `<span class="lbl" title="${esc(k)}">${esc(k)}</span>
       <span><span class="bar" style="display:block;width:${(v / top) * 100}%"></span></span>
@@ -1551,15 +1562,29 @@ function renderResearch() {
     ${other.length ? `<details class="also" style="margin-top:8px"><summary class="muted" style="font-size:12.5px;cursor:pointer">${other.length} more that only mention it</summary><ul class="news">${other.slice(0, 30).map(li).join('')}</ul></details>` : ''}
     ${d.errors.length ? `<p class="down">${d.errors.map(esc).join('<br>')}</p>` : ''}</div>`;
 
+  // a fund: what it holds by sector, as a ring
+  const F = d.fund, secs = F?.sectors?.length ? F.sectors : null;
+  const sectors = secs ? `<div class="card"><h2>Sectors</h2>
+    <p class="sub">What the fund holds, by sector${F.asOf ? ` - as the issuer reports it, to ${esc(day(F.asOf))}` : ''}.</p>
+    <div id="r-sec"></div></div>` : '';
+
   const pe = d.pe ? `<div class="card"><h2>Price / earnings over time</h2>
     <p class="sub">What a year of profit costs: price ÷ the earnings per share reported, ${d.pe.now != null ? `now <b>${N0.format(d.pe.now)}×</b>` : 'now over 100×'}, in the middle since ${esc(day(d.pe.since))} <b>${N0.format(d.pe.median)}×</b>.
       ${d.stats?.forwardPe?.[0] ? `On analysts' ${esc(d.stats.forwardPe[0].year)} estimates it is <b>${N0.format(d.stats.forwardPe[0].pe)}×</b> - the P/E most apps show (Trade Republic too).` : ''}
       ${d.pe.now != null && d.pe.now < d.pe.median ? 'Low against its own past: cheap, or the market expects less profit ahead.' : 'High against its own past: expensive, or the market expects more profit ahead.'}</p>
     <div class="chart" id="r-pe"></div>
     <p class="note">${d.isin?.startsWith('US') ? `Net income per year from onvista${d.pe.nasdaq?.length ? ` (${esc(d.pe.nasdaq.join(', '))} from Nasdaq, in euros at today's rate)` : ''} ÷ today's share count` : 'Earnings per share per year from onvista'}, blended between year ends (about the last twelve months); after ${esc(d.pe.basis)} it stays at ${esc(d.pe.basis)}. No line in or just after a loss year, or above 100×.</p></div>` : '';
-  $('#r-body').innerHTML = head + pe + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div>' : '')
+  $('#r-body').innerHTML = head + sectors + pe + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div>' : '')
     + `<div class="pair">${fit}${news}</div>`;
   $('#r-more').onclick = () => openAnalysis(d.key);
+  if (secs) {
+    const list = secs.map(s => ({ k: s.name, v: s.pct })), sum = list.reduce((s, x) => s + x.v, 0);
+    if (sum < 99.5) list.push({ k: 'Not classified', v: 100 - sum });   // cash, or what the issuer leaves out
+    list.sort((a, b) => b.v - a.v);
+    const share = v => `${nf(0, v < 10 ? 1 : 0).format(v)} %`;
+    donut($('#r-sec'), list, { total: Math.max(100, sum), big: secs.length, small: secs.length === 1 ? 'sector' : 'sectors', share, rest: true,
+      tip: (x, color) => tipRow('Share', share(x.v), color) + (x.sub ?? []).map(s => tipRow(s.k, share(s.v))).join('') });
+  }
   const fb = $('#r-follow');
   if (fb) fb.onclick = async () => {
     fb.disabled = true;
