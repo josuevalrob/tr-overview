@@ -241,6 +241,10 @@ check('research: home listings - estimates on another profit, next 12 months, di
   assert.equal(pt.Outlook.tone, 'good');
   assert.deepEqual(pt.Dividend.checks.map(c => c.ok), [true, true, true, null]);   // 21 % paid out; the spin-off drop is no cut
   assert.equal(pt.Dividend.tone, 'good');
+  assert.equal(r.stats.withheld, null);                               // no country, no withholding
+  const ca = readout({ an: { ...an, profile: { ...an.profile, country: 'Canada' } }, closes: [], quote: { last: 30 }, today: '2026-10-07' });
+  assert.equal(ca.stats.yieldAfterTax.toFixed(3), '0.451');           // 0,7 % × (1 − 25 % − 10 % × 1,055)
+  assert.match(ca.points.find(p => p.topic === 'Dividend').text, /the other 10 % comes back only if you reclaim it there/);
   assert.equal(r.stats.interestCover, 7);                             // (120 + 20) ÷ 20
   assert.equal(pt['Balance sheet'].tone, 'good');                     // liabilities 1,4× equity, from 1,5×
   assert.equal(pt.Returns.head, 'ROE 20 %');
