@@ -879,6 +879,23 @@ function renderAnalysis() {
       ${us?.dividends?.length ? `<p class="note">Recent payments: ${us.dividends.slice(0, 4).map(x => `${day(x.exDate)} ${money(x.amount, 'USD')}`).join(' · ')}</p>` : ''}
     </div>` : (pr ? `<div class="sec"><h3>Dividends</h3><p class="muted" style="margin:0">No dividend.</p></div>` : '');
 
+  // the company: staff, CEO, splits and spin-offs (onvista)
+  const emp = d.annual.filter(r => !r.estimate && r.employees > 0), e0 = emp.at(-6) ?? emp[0], e1 = emp.at(-1);
+  const facts = pr && (e1 || pr.ceo || d.splits?.length || pr.wkn) ? `<div class="sec"><h3>Company</h3><div class="kv">
+      ${e1 ? `<span>Employees (${esc(e1.label)})</span><span>${N0.format(e1.employees)}${e0 && e0 !== e1 ? ` <span class="muted">· ${esc(e0.label)}: ${N0.format(e0.employees)}</span>` : ''}</span>` : ''}
+      ${pr.ceo ? `<span>CEO</span><span>${esc(pr.ceo.name)}${pr.ceo.payRatio ? ` <span class="muted">· paid ${N0.format(pr.ceo.payRatio)}× the median employee</span>` : ''}</span>` : ''}
+      ${pr.wkn ? `<span>WKN · symbol</span><span>${esc(pr.wkn)}${pr.symbol ? ` · ${esc(pr.symbol)}` : ''}${us?.listedAs ? ` · US ${esc(us.listedAs)}` : ''}</span>` : ''}
+      ${d.splits?.length ? `<span>Splits, spin-offs</span><span>${d.splits.slice(0, 4).map(x => `${esc(day(x.date))} ${Math.abs(x.factor - Math.round(x.factor)) > 0.01 && x.factor < 2 ? 'spin-off / capital' : `split ${nf(0, 2).format(x.factor)}:1`}`).join('<br>')}</span>` : ''}
+    </div></div>` : '';
+  // every venue onvista lists, most traded first; the one the prices here come from marked
+  const venue = pos?.venue ?? (w?.quote && !w.quote.error ? w.quote.venue : null);
+  const lst = (d.listings || []).slice().sort((a, b) => (b.volume4w ?? 0) - (a.volume4w ?? 0));
+  const listings = lst.length > 1 ? `<div class="sec"><h3>Where it trades</h3>
+      <div class="scroll"><table><thead><tr><th>Venue</th><th>Currency</th><th>Last</th><th>4 weeks traded</th></tr></thead><tbody>
+      ${lst.slice(0, 8).map(l => `<tr><td>${esc(l.venue)}${l.venue === venue ? ' <span class="muted">· prices here</span>' : ''}</td><td>${esc(l.currency || '')}</td>
+        <td>${l.last == null ? '–' : nf(2, 2).format(l.last)}</td><td>${l.volume4w == null ? '–' : CMP.format(l.volume4w)}</td></tr>`).join('')}</tbody></table></div>
+      ${lst.length > 8 ? `<p class="note">${lst.length - 8} more venues.</p>` : ''}</div>` : '';
+
   el.innerHTML = `<button class="x" aria-label="Close">×</button>
     <h2>${esc(displayName(d.key))}</h2>
     <div class="id">${[d.isin, pr?.sector, pr?.country].filter(Boolean).map(esc).join(' · ')}</div>
@@ -894,9 +911,9 @@ function renderAnalysis() {
       ${pr?.marketCap ? `<span>Market value</span><span>${big(pr.marketCap, pr.marketCapCurrency)}</span>` : ''}
       ${pos ? `<span>You hold</span><span>${shares(pos.shares)} · ${eur(pos.value)}</span><span>Your gain</span><span class="${dir(pos.gain)}">${signed(pos.gain)} (${pct(pos.gainPct)})</span>` : ''}
     </div>
-    ${analysts}${events}${fin}${dividends}
+    ${analysts}${events}${fin}${dividends}${facts}${listings}
     ${d.notes.length ? `<p class="note">${d.notes.map(esc).join(' ')}</p>` : ''}
-    <p class="note">Sources: onvista${us ? ', Nasdaq' : ''}. Not investment advice.</p>`;
+    <p class="note">Sources: onvista${us ? `, Nasdaq${us.listedAs ? ` (US listing ${esc(us.listedAs)})` : ''}` : ''}. Not investment advice.</p>`;
   el.querySelector('.x').onclick = closeAnalysis;
   el.querySelectorAll('#a-period button').forEach(b => b.onclick = () => { A.period = b.dataset.p; renderAnalysis(); });
   el.querySelectorAll('#p-range button').forEach(b => b.onclick = () => { A.range = b.dataset.r; store.set('tro.prange', A.range); renderAnalysis(); });
