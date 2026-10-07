@@ -128,6 +128,8 @@ check('news: searched by the company name and its other company names in bracket
   assert.deepEqual(newsNames('Pinduoduo (PDD Holdings, Temu)'), ['Pinduoduo', 'PDD Holdings']);
   assert.deepEqual(newsNames('Sea Limited (ADR)'), ['Sea Limited']);
   assert.deepEqual(newsNames('Alphabet (A) (ehem. Google)'), ['Alphabet']);
+  assert.deepEqual(newsNames('On Holding'), ['On Holding']);           // not "On": a word in every headline
+  assert.deepEqual(newsNames('Siemens Group'), ['Siemens']);
 });
 
 check('research: themes count stories that name the company, once per story', () => {
