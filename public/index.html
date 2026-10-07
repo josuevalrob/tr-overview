@@ -1456,7 +1456,12 @@ function renderResearch() {
     ${other.length ? `<details class="also" style="margin-top:8px"><summary class="muted" style="font-size:12.5px;cursor:pointer">${other.length} more that only mention it</summary><ul class="news">${other.slice(0, 30).map(li).join('')}</ul></details>` : ''}
     ${d.errors.length ? `<p class="down">${d.errors.map(esc).join('<br>')}</p>` : ''}</div>`;
 
-  $('#r-body').innerHTML = head + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div>' : '')
+  const pe = d.pe ? `<div class="card"><h2>Price / earnings over time</h2>
+    <p class="sub">What a year of profit costs: market value ÷ net income, ${d.pe.now != null ? `now <b>${N0.format(d.pe.now)}×</b>` : 'now over 100×'}, in the middle since ${esc(day(d.pe.since))} <b>${N0.format(d.pe.median)}×</b>.
+      Low against its own past: cheap, or the market expects less profit ahead.</p>
+    <div id="r-pe"></div>
+    <p class="note">Net income per year from onvista, blended between year ends (about the last twelve months); after ${esc(d.pe.basis)} it stays at ${esc(d.pe.basis)}. Today's share count throughout. No line in or just after a loss year, or above 100×.</p></div>` : '';
+  $('#r-body').innerHTML = head + pe + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div>' : '')
     + `<div class="pair">${fit}${news}</div>`;
   $('#r-more').onclick = () => openAnalysis(d.key);
   $('#r-open').onclick = () => {
@@ -1464,6 +1469,7 @@ function renderResearch() {
     document.querySelectorAll('#r-body details.ro-row').forEach(x => { x.open = R.open; });
     $('#r-open').textContent = R.open ? 'Hide details' : 'Show all details';
   };
+  renderPe();
   R.kedit = false; renderKpis();
   const sl = $('#r-slide');
   if (sl) {
@@ -1471,6 +1477,15 @@ function renderResearch() {
     sl.onchange = () => store.set('tro.ramt', R.amount ? String(R.amount) : '');
     drawFit();
   }
+}
+
+/** P/E by day and the stock's own middle P/E as a flat line. */
+function renderPe() {
+  const p = R.data?.pe, host = $('#r-pe');
+  if (!p || !host) return;
+  timeChart(host, { dates: p.dates, H: 200, series: [{ name: 'P/E', color: '--s1', values: p.values },
+                                                   { name: 'Its middle', color: '--other', values: p.dates.map(() => p.median) }],
+    fmtTick: v => `${N0.format(v)}×`, fmtVal: v => (v == null ? 'loss or over 100' : `${nf(0, 1).format(v)}×`) });
 }
 
 /** Everything under the slider, for the amount it is at. The slider itself is never redrawn while dragged. */
@@ -1764,7 +1779,7 @@ async function loadSummary(live = false) {
   } catch (e) { $('#meta').innerHTML = `<span class="down">${esc(e.message)}</span>`; }
 }
 let resizeT;
-addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { renderMonths(); if (S.data && !S.data.empty) { renderDepotChart(); renderIntraday(); } }, 150); });
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { renderMonths(); if (S.data && !S.data.empty) { renderDepotChart(); renderIntraday(); } renderPe(); }, 150); });
 // live: every number on the page refreshes every minute while it is on screen, with prices
 // under a minute old - the same request also records the Today line's next point
 setInterval(() => {

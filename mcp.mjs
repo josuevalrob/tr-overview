@@ -211,7 +211,7 @@ const TOOLS = [
   },
   {
     name: 'research',
-    description: 'Everything to decide on one stock, held or not: a read-out made from the numbers (price vs 52 weeks, trend vs 50/200-day averages, beta, growth, profit, returns on equity/assets, free cash flow, balance sheet/net cash, valuation incl. P/E on estimates, P/B, PEG, Graham number + checks, Buffett checks, Lynch (growth + yield) / P/E, Ackman checks, analysts, insider trades, short interest, fund holders, next results, what this week\'s headlines are about, dividend, listing currency) - each point with a good/bad/neutral tone and the fixed rule behind it - plus the week\'s top stories. With `amount` (EUR) also what that buy does to the depot: its weight, the largest position, the mix by position, sector and country, and the share in US dollars before and after. Stock by name, ISIN or US ticker ("SE").',
+    description: 'Everything to decide on one stock, held or not: a read-out made from the numbers (price vs 52 weeks, trend vs 50/200-day averages, beta, growth, profit, returns on equity/assets, free cash flow, balance sheet/net cash, valuation incl. P/E on estimates and P/E against its own past by year, P/B, PEG, Graham number + checks, Buffett checks, Lynch (growth + yield) / P/E, Ackman checks, analysts, insider trades, short interest, fund holders, next results, what this week\'s headlines are about, dividend, listing currency) - each point with a good/bad/neutral tone and the fixed rule behind it - plus the week\'s top stories. With `amount` (EUR) also what that buy does to the depot: its weight, the largest position, the mix by position, sector and country, and the share in US dollars before and after. Stock by name, ISIN or US ticker ("SE").',
     inputSchema: { type: 'object', required: ['stock'], properties: {
       stock: { type: 'string', description: 'Name, ISIN or US ticker, e.g. "Sea Limited", "US81141R1005", "SE".' },
       amount: { type: 'number', description: 'Euros you think of buying, e.g. 5000.' },
@@ -232,6 +232,10 @@ const TOOLS = [
         your_position: r.held && { shares: r.held.shares, value: e(r.held.value), gain_eur: e(r.held.gain), gain_pct: r2(r.held.gainPct), weight_pct: r2(r.held.weight) },
         readout: r.points.map(p => ({ group: p.group, topic: p.topic, tone: p.tone, head: p.head, text: p.text, ...(p.rule ? { rule: p.rule } : {}), ...(p.checks ? { checks: p.checks } : {}) })),
         numbers: Object.fromEntries(Object.entries(r.stats).map(([k, v]) => [k, typeof v === 'number' ? r2(v) : v])),
+        // P/E against its own past: by year, lowest / middle / highest (market value ÷ net income)
+        pe_history: r.pe && { now: r.pe.now != null ? r2(r.pe.now) : null, middle: r2(r.pe.median), since: r.pe.since, profit_until: r.pe.basis,
+          by_year: Object.entries(r.pe.dates.reduce((o, d, i) => (r.pe.values[i] != null && (o[d.slice(0, 4)] ??= []).push(r.pe.values[i]), o), {}))
+            .map(([year, v]) => (v.sort((x, y) => x - y), { year, low: r2(v[0]), middle: r2(v[Math.floor(v.length / 2)]), high: r2(v.at(-1)) })) },
         company_numbers: r.kpis && kpiOut(r.kpis),
         news_themes: r.themes,
         // headlines that name the company first: a keyword search also returns ones that only mention it
