@@ -301,6 +301,16 @@
   .cmp .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink2)}
   .cmp .num b{color:var(--ink);font-weight:600}
   .rhead{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start;justify-content:space-between}
+  .rhead .acts{display:flex;gap:6px;flex-wrap:wrap}
+  .sugg-wrap{position:relative;flex:1;min-width:220px;display:flex}
+  .sugg-wrap input{flex:1;min-width:0}
+  .sugg{position:absolute;z-index:20;top:calc(100% + 4px);left:0;width:max(100%, min(460px, calc(100vw - 32px)));margin:0;padding:4px;list-style:none;
+        background:var(--raised);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.14)}
+  .sugg li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 10px;padding:6px 8px;border-radius:6px;cursor:pointer}
+  .sugg li:hover,.sugg li[aria-selected="true"]{background:var(--wash)}
+  .sugg .n{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sugg .m{font-size:11.5px;color:var(--muted);grid-column:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sugg .ex{grid-row:1/3;grid-column:2;align-self:center;font-size:11.5px;color:var(--good);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -360,7 +370,11 @@
       <div class="card">
         <div class="row">
           <form class="add" id="r-add">
-            <input id="r-q" placeholder="Research a stock: name, ISIN or US ticker (SE)" autocomplete="off">
+            <div class="sugg-wrap">
+              <input id="r-q" placeholder="Research a stock: name, ISIN or US ticker (SE)" autocomplete="off"
+                     role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="r-sugg">
+              <ul class="sugg" id="r-sugg" role="listbox" hidden></ul>
+            </div>
             <button class="btn" type="submit">Research</button>
           </form>
         </div>
@@ -1365,7 +1379,7 @@ $('#add').onsubmit = async ev => {
 
 // ------------------------------------------------------------ research: one stock, held or not
 // A read-out made from the numbers by fixed rules (lib/research.mjs) - no model. Each point's
-// colour has its rule under "?". Researching a stock follows it, so it also shows in News.
+// colour has its rule under "?". "Follow" puts a stock on the watchlist, so it also shows in News.
 const R = { key: store.get('tro.rkey', ''), amount: Number(store.get('tro.ramt', '')) || 0, by: store.get('tro.rby', 'position'),
             open: store.get('tro.ropen', '') === '1', data: null, seq: 0 };
 /** One read-out row: dot, topic, headline; the sentence and an investor's checks open on click. */
@@ -1387,7 +1401,7 @@ async function loadResearch() {
   try { S.watch = (await api('/api/watchlist')).items; } catch { /* chips from holdings only */ }
   renderResearchChips();
   if (R.key) openResearch(R.key);
-  else $('#r-body').innerHTML = `<div class="card"><p class="muted" style="margin:0">Type a stock above - a name, an ISIN or a US ticker like <b>SE</b>. You get a read-out from its numbers, this week's news, and what buying it would do to your depot.</p></div>`;
+  else $('#r-body').innerHTML = `<div class="card"><p class="muted" style="margin:0">Type a stock above - a name, an ISIN or a US ticker like <b>SE</b> - and pick it from the list. You get a read-out from its numbers, this week's news, and what buying it would do to your depot.</p></div>`;
 }
 function renderResearchChips() {
   const held = (S.data?.positions || []).map(p => ({ key: p.key, name: p.name, held: true }));
@@ -1410,7 +1424,8 @@ async function openResearch(key) {
   const seq = ++R.seq;
   R.key = key; store.set('tro.rkey', key);
   $('#r-chips').querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.k === key)));
-  if (R.data?.key !== key) $('#r-body').innerHTML = `<div class="card"><p class="muted" style="margin:0">Reading ${esc(displayName(key))}: prices, financials, analysts, news…</p></div>`;
+  const label = displayName(key) !== key ? displayName(key) : R.picked?.key === key ? R.picked.name : key;
+  if (R.data?.key !== key) $('#r-body').innerHTML = `<div class="card"><p class="muted" style="margin:0">Reading ${esc(label)}: prices, financials, analysts, news…</p></div>`;
   try {
     const d = await api(`/api/research/${encodeURIComponent(key)}`);
     if (seq !== R.seq) return;                       // another one was asked for meanwhile
@@ -1426,7 +1441,9 @@ function renderResearch() {
         <div class="id muted" style="font-size:12px">${[d.isin, pr?.symbol, pr?.sector, pr?.country].filter(Boolean).map(esc).join(' · ')}</div>
         ${q ? `<div class="px"><span class="v">${price(q.last)}</span>${dayPct != null ? move(dayPct, dayPct) : ''}<span class="muted" style="font-size:12px">${esc(q.venue || '')}</span></div>` : ''}
       </div>
-      <button class="btn" id="r-more" type="button">Charts &amp; financials →</button></div>
+      <div class="acts">${d.held ? '' : `<button class="btn" id="r-follow" type="button" aria-pressed="${!!d.following}"
+          title="On the watchlist it also shows in News">${d.following ? 'Following ✓' : 'Follow'}</button>`}
+        <button class="btn" id="r-more" type="button">Charts &amp; financials →</button></div></div>
     ${d.held ? `<p class="note" style="margin-top:6px">You hold ${shares(d.held.shares)} · ${eur(d.held.value)} · <span class="${dir(d.held.gain)}">${signed(d.held.gain)} (${pct(d.held.gainPct)})</span> · ${N0.format(d.held.weight)} % of the depot</p>` : ''}
     <div class="row" style="margin:16px 0 0"><h3 style="margin:0;font-size:13px">Read-out</h3>
       <div class="keys" style="margin:0"><span><i style="background:var(--good)"></i>speaks for it</span><span><i style="background:var(--critical)"></i>speaks against it</span><span><i style="background:var(--axis)"></i>a fact</span>
@@ -1482,6 +1499,25 @@ function renderResearch() {
   $('#r-body').innerHTML = head + pe + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div>' : '')
     + `<div class="pair">${fit}${news}</div>`;
   $('#r-more').onclick = () => openAnalysis(d.key);
+  const fb = $('#r-follow');
+  if (fb) fb.onclick = async () => {
+    fb.disabled = true;
+    try {
+      if (d.following) {
+        await api(`/api/watchlist/${encodeURIComponent(d.key)}`, { method: 'DELETE' });
+        S.watch = S.watch.filter(w => w.key !== d.key);
+        toast(`Stopped following <b>${esc(d.name)}</b>`);
+      } else {
+        const item = await api('/api/watchlist', post({ query: d.key }));
+        S.watch = S.watch.concat({ ...item, quote: null });
+        toast(`Following <b>${esc(item.name)}</b> - it shows in News too`);
+      }
+      d.following = !d.following; S.news = null;
+      fb.textContent = d.following ? 'Following ✓' : 'Follow'; fb.setAttribute('aria-pressed', String(d.following));
+      renderResearchChips();
+    } catch (e) { toast(`<span class="down">${esc(e.message)}</span>`); }
+    finally { fb.disabled = false; }
+  };
   $('#r-open').onclick = () => {
     R.open = !R.open; store.set('tro.ropen', R.open ? '1' : '');
     document.querySelectorAll('#r-body details.ro-row').forEach(x => { x.open = R.open; });
@@ -1723,20 +1759,64 @@ function renderKpiEdit(box, t) {
   };
 }
 
+// suggestions while typing: name, ISIN, where it trades in the US; the ISIN or US ticker typed is marked "exact".
+// Picking one only opens it - "Follow" on the read-out puts it on the watchlist.
+const SG = { q: '', list: [], at: -1, seq: 0, timer: 0 };
+const KIND = { STOCK: 'Stock', FUND: 'Fund / ETF', CRYPTO: 'Crypto' };
+function drawSugg() {
+  const ul = $('#r-sugg'), inp = $('#r-q'), show = SG.list.length > 0 && document.activeElement === inp;
+  ul.hidden = !show; inp.setAttribute('aria-expanded', String(show));
+  ul.innerHTML = SG.list.map((h, i) => `<li role="option" id="r-sg${i}" data-i="${i}" aria-selected="${i === SG.at}">
+    <span class="n">${esc(h.name)}</span>
+    <span class="m">${[h.isin, h.us ? `${h.us.exchange}: ${h.us.ticker}` : null, KIND[h.type] ?? h.type].filter(Boolean).map(esc).join(' · ')}</span>
+    ${h.exact ? '<span class="ex">✓ exact</span>' : ''}</li>`).join('');
+  if (SG.at >= 0) inp.setAttribute('aria-activedescendant', `r-sg${SG.at}`); else inp.removeAttribute('aria-activedescendant');
+}
+async function suggest(q) {
+  const seq = ++SG.seq;
+  try {
+    const list = (await api(`/api/search?q=${encodeURIComponent(q)}`)).results;
+    if (seq !== SG.seq) return;                      // typed on meanwhile
+    SG.q = q; SG.list = list; SG.at = -1; drawSugg();
+  } catch { /* the next keystroke asks again */ }
+}
+function pickSugg(hit) {
+  clearTimeout(SG.timer); SG.seq++; SG.list = []; SG.at = -1;
+  $('#r-q').value = ''; $('#r-q').blur(); drawSugg();
+  R.picked = { key: hit.key, name: hit.name };
+  openResearch(hit.key);
+}
+$('#r-q').oninput = () => {
+  clearTimeout(SG.timer);
+  const q = $('#r-q').value.trim();
+  if (q.length < 2) { SG.seq++; SG.list = []; return drawSugg(); }
+  SG.timer = setTimeout(() => suggest(q), 250);
+};
+$('#r-q').onkeydown = ev => {
+  if (ev.key === 'Escape') { SG.list = []; return drawSugg(); }
+  if (!SG.list.length || !['ArrowDown', 'ArrowUp'].includes(ev.key)) return;
+  ev.preventDefault();
+  const n = SG.list.length;
+  SG.at = ev.key === 'ArrowDown' ? (SG.at + 1) % n : (SG.at <= 0 ? n - 1 : SG.at - 1);
+  drawSugg();
+};
+$('#r-q').onfocus = drawSugg;
+$('#r-q').onblur = () => setTimeout(drawSugg, 0);
+$('#r-sugg').onmousedown = ev => {                  // before the input's blur hides the list
+  const li = ev.target.closest('li[data-i]');
+  if (!li) return;
+  ev.preventDefault(); pickSugg(SG.list[li.dataset.i]);
+};
 $('#r-add').onsubmit = async ev => {
   ev.preventDefault();
   const q = $('#r-q').value.trim(); if (!q) return;
+  if (SG.at >= 0 && SG.list[SG.at]) return pickSugg(SG.list[SG.at]);
   const btn = ev.target.querySelector('button'); btn.disabled = true;
   try {
-    const hit = (await api(`/api/search?q=${encodeURIComponent(q)}`)).results[0];
-    if (!hit) throw new Error(`nothing found for "${q}"`);
-    if (!heldPos(hit.key) && !watchItem(hit.key)) {         // researching follows it: it shows in News too
-      const item = await api('/api/watchlist', post({ query: hit.key }));
-      S.watch = S.watch.concat({ ...item, quote: null }); S.news = null;
-      toast(`Following <b>${esc(item.name)}</b> - remove it with × on its chip`);
-    }
-    $('#r-q').value = '';
-    renderResearchChips(); openResearch(hit.key);
+    clearTimeout(SG.timer);
+    const list = SG.q === q && SG.list.length ? SG.list : (await api(`/api/search?q=${encodeURIComponent(q)}`)).results;
+    if (!list[0]) throw new Error(`nothing found for "${q}"`);
+    pickSugg(list[0]);
   } catch (e) { toast(`<span class="down">${esc(e.message)}</span>`); }
   finally { btn.disabled = false; }
 };

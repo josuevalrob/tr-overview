@@ -9,7 +9,7 @@ your own machine, keep your data there. No account login, no database, no depend
 | **Months** | return per year (money-weighted, everything or stocks only), what the account earned so far, stocks value vs cost, what each month earned, a month-by-month table |
 | **Taxes** | the Sparer-Pauschbetrag used per year, an estimate to 31 Dec, "if you sold everything today", stock sales (FIFO), crypto holding periods |
 | **News** | Google News headlines (English / German) for every holding, plus any stock you choose to follow; share of headlines per stock, biggest stories, similar headlines grouped |
-| **Research** | any stock by name, ISIN or US ticker (`SE`): a read-out made from its numbers by fixed rules - price vs 52 weeks, trend (50- / 200-day average, this year, volume), beta, growth, profit, returns (ROE, ROA, margins), cash flow (free cash flow, buybacks), balance sheet (net cash, current ratio, debt/equity), valuation (P/E on last year and on estimates, P/S, P/B, PEG, expected EPS growth), three investors' tests - **Graham** (Graham number √(22,5 × EPS × book value a share) + his defensive checks), **Buffett** (ROE, gross margin, debt vs profit, steady profit and free cash flow - he published no formula, so the checks commonly drawn from his letters), **Lynch** ((growth + dividend yield) ÷ P/E: under 1 poor, 1,5 okay, 2 what he looked for), **Ackman** (Pershing Square's measurable criteria: free cash flow every year, revenue up every year, operating margin, debt vs free cash flow, free-cash-flow yield), analysts, insiders (sales / buys, trading plans), short interest, funds (13F holders added / cut), next results, what this week's headlines are about, dividend, listing currency - in five groups (Price · Business · Valuation · Who's buying · Good to know), one headline number per row and the full sentence (and an investor's ✓ / ✗ checks) on click, each green / red / grey with its rule under "?"; a slider from 0 to your cash for what a buy does to the depot - weight, largest position, share in US dollars, and the share by position, sector or country (toggle) before → after, live while you drag; the track turns red where the stock passes 25 % of the depot; this week's stories. **Company numbers**: what the company reports in its own quarterly results and no feed has (Sea: Shopee GMV, take rate, loan book, NPL…), last 4 quarters with the change on a year before, your own green / red lines, "update due" once newer results are out; beside it a small bar chart per number over every saved quarter. Researching a stock follows it, so it shows in News too |
+| **Research** | any stock by name, ISIN or US ticker (`SE`): a read-out made from its numbers by fixed rules - price vs 52 weeks, trend (50- / 200-day average, this year, volume), beta, growth, profit, returns (ROE, ROA, margins), cash flow (free cash flow, buybacks), balance sheet (net cash, current ratio, debt/equity), valuation (P/E on last year and on estimates, P/S, P/B, PEG, expected EPS growth), three investors' tests - **Graham** (Graham number √(22,5 × EPS × book value a share) + his defensive checks), **Buffett** (ROE, gross margin, debt vs profit, steady profit and free cash flow - he published no formula, so the checks commonly drawn from his letters), **Lynch** ((growth + dividend yield) ÷ P/E: under 1 poor, 1,5 okay, 2 what he looked for), **Ackman** (Pershing Square's measurable criteria: free cash flow every year, revenue up every year, operating margin, debt vs free cash flow, free-cash-flow yield), analysts, insiders (sales / buys, trading plans), short interest, funds (13F holders added / cut), next results, what this week's headlines are about, dividend, listing currency - in five groups (Price · Business · Valuation · Who's buying · Good to know), one headline number per row and the full sentence (and an investor's ✓ / ✗ checks) on click, each green / red / grey with its rule under "?"; a slider from 0 to your cash for what a buy does to the depot - weight, largest position, share in US dollars, and the share by position, sector or country (toggle) before → after, live while you drag; the track turns red where the stock passes 25 % of the depot; this week's stories. **Company numbers**: what the company reports in its own quarterly results and no feed has (Sea: Shopee GMV, take rate, loan book, NPL…), last 4 quarters with the change on a year before, your own green / red lines, "update due" once newer results are out; beside it a small bar chart per number over every saved quarter. Suggestions while you type: name, ISIN, where it trades in the US (NYSE: ONON), the ISIN or US ticker you typed marked "exact". **Follow** on the read-out puts a stock in News too |
 | **Analysis** (click a position) | sidebar: price chart (1M–5Y) with your buys and sells marked, 52-week range, financials (annual since ~2016 + EPS/dividend estimates; quarterly for US shares), analysts' buy/hold/sell and price targets, next earnings date, dividends |
 
 ## Run it
@@ -70,8 +70,9 @@ The monthly *Account statement* is a PDF with net amounts only (no fee, no tax) 
 - `data/` is in `.gitignore`, as is every `*.csv` except the made-up `public/sample.csv` — your
   transactions can never end up in a commit.
 - The server listens on `127.0.0.1` only. What leaves your machine: price requests to onvista (by
-  ISIN), company data requests to Nasdaq and FINRA (by US ticker, US-listed shares only) and news
-  searches to Google News (by company name). Never your transactions.
+  ISIN), ISINs to OpenFIGI (for their US ticker), company data requests to Nasdaq and FINRA (by US
+  ticker, US-listed shares only) and news searches to Google News (by company name and US ticker).
+  Never your transactions.
 - `data/intraday.json`: today's depot value, recorded every minute while the page is open and every 5
   minutes otherwise (onvista does not serve intraday charts to scripts). Started fresh each day; the line
   covers only the hours the server ran.
@@ -88,13 +89,18 @@ The monthly *Account statement* is a PDF with net amounts only (no fee, no tax) 
   earnings dates, quarterly results, fiscal years as reported with balance sheet and cash flow (onvista can
   lag: Sea Limited ends in 2023 there), market value, volume, EPS consensus, PEG, dividend payments,
   insider trades (3 / 12 months), institutional holders (13F). Short interest: FINRA's public API (no key),
-  twice a month, US-listed shares only. Non-US tickers are never sent to Nasdaq, since
-  the same symbol can be another company there. A ticker typed in capitals ("SE") is looked up on Nasdaq
-  for its company name, then searched on onvista. Trade Republic's derivatives long/short ratio is its own
+  twice a month, US-listed shares only. Matching is by ID, not by name: OpenFIGI (no key, 25
+  requests a minute) gives an ISIN's US ticker and exchange - NYSE or Nasdaq, not OTC - so a Swiss
+  share on the NYSE (On, ONON) gets its US data, and a home symbol is never sent to Nasdaq, where it
+  can be another company. A ticker typed in the search ("onon", "SE") is looked up on Nasdaq for its
+  company name, searched on onvista, and the hit whose ISIN has that ticker is the exact one.
+  Trade Republic's derivatives long/short ratio is its own
   customer data and is not public.
-- **News:** Google News RSS, searched by the company name from the export, last 7 days, one query
-  per day (Google lists at most 100 per query; a busy stock still hits that, shown as "+"). A plain
-  keyword search — generic names can pull in unrelated headlines. Headlines are grouped into stories
+- **News:** Google News RSS, searched by the company name from the export and, for US-listed shares,
+  "NYSE:ONON" - last 7 days, one query per day (Google lists at most 100 per query; a busy stock still
+  hits that, shown as "+"). Google matches words anywhere in the article, so only headlines that name
+  the company (its first word, or the whole name when that is short: "On Holding") or its ticker are
+  kept. Headlines are grouped into stories
   without a model: same stock, within two days, sharing their rare words (tf-idf cosine).
 
 ## Company numbers
@@ -134,6 +140,7 @@ lib/portfolio.mjs   merge exports, FIFO lots, positions, months, tax
 lib/market.mjs      onvista: ISIN -> LS Exchange quote, daily closes
 lib/news.mjs        Google News RSS
 lib/analysis.mjs    per-stock analysis: onvista figures + Nasdaq (US only)
+lib/figi.mjs        OpenFIGI: ISIN -> US ticker and exchange
 lib/kpis.mjs        company numbers (data/kpis/): validate, merge, last 4 quarters + change, lines
 lib/research.mjs    the Research read-out and "if you buy": fixed rules over the analysis, prices, news
 lib/csv.mjs         CSV parsing, euro -> cents

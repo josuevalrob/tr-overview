@@ -337,9 +337,9 @@ const TOOLS = [
   },
   {
     name: 'search_instrument',
-    description: 'Find a stock, ETF or crypto by name, ISIN or US ticker (onvista, Nasdaq for tickers). Returns names, ISINs and types.',
+    description: 'Find a stock, ETF or crypto by name, ISIN or US ticker (onvista; a ticker is matched by ISIN via OpenFIGI). Returns names, ISINs, types, the US listing (ticker, exchange) and exact: the ISIN or US ticker that was asked for.',
     inputSchema: { type: 'object', required: ['query'], properties: { query: { type: 'string' } } },
-    async run(a) { return { results: (await app.search(a.query)).slice(0, 10).map(h => ({ name: h.name, isin: h.isin, type: h.type, key: h.key })) }; },
+    async run(a) { return { results: (await app.search(a.query)).slice(0, 10).map(h => ({ name: h.name, isin: h.isin, type: h.type, key: h.key, us: h.us, exact: h.exact })) }; },
   },
   {
     name: 'import_export',
