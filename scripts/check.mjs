@@ -258,8 +258,24 @@ check('research: home listings - estimates on another profit, next 12 months, di
   assert.equal(y.stats.sharesChangeYearly.toFixed(1), '-1.5');        // 150 -> 145,53 over 2 years
   assert.equal(y.stats.buybackYield.toFixed(2), '1.00');              // 33,81 $ = 30 € of 3.000 €
   assert.equal(y.points.find(p => p.topic === 'Cash flow').tone, 'good');
+  assert.equal(pt.Valuation.head, 'P/E 10 on 2026 est. · 30 on 2025');   // on estimates first, as most sites show it
   const bank = readout({ an: { ...an, profile: { ...an.profile, kind: 'bank' } }, closes: [], quote: { last: 30 }, today: '2026-10-07' });
   assert.equal(bank.points.find(p => p.topic === 'Balance sheet').tone, 'neutral');
+});
+
+check('research: Nasdaq\'s last year lags onvista\'s - the newer one counts', () => {
+  // Nasdaq to Aug 2025 with 1 $ a share; onvista already has 25/26 with 8 €
+  const an = { key: 'US0000000003', name: 'M', type: 'STOCK', isin: 'US0000000003', notes: [], profile: { shares: 100 },
+               annual: [{ label: '24/25', eps: 1, revenue: 300, netIncome: 100 }, { label: '25/26', eps: 8, revenue: 1000, netIncome: 800 },
+                        { label: '26/27', estimate: true, eps: 16 }],
+               us: { price: 100, market: { marketCap: 10000 }, epsForecast: [{ year: '2027', eps: 18 }],
+                     years: [{ period: '2024-08-29', revenue: 250, netIncome: 80 }, { period: '2025-08-28', revenue: 330, netIncome: 100 }] } };
+  const r = readout({ an, closes: [], quote: { last: 80 }, today: '2026-10-07' });
+  const pt = Object.fromEntries(r.points.map(p => [p.topic, p]));
+  assert.equal(r.stats.pe, 10);                                       // 80 € ÷ 8 €, not 10.000 $ ÷ 100 $ = 100
+  assert.equal(pt.Valuation.head, 'P/E 5 on 26/27 est. · 10 on 25/26');
+  assert.match(pt.Growth.text, /^Revenue 25\/26/);
+  assert.match(pt.Data.text, /onvista already has 25\/26: the newer one is used/);
 });
 
 check('company numbers: change on a year before, as reported when given; lines judge growth or level', () => {
