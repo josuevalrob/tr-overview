@@ -228,6 +228,31 @@ check('research: balance sheet, cash flow, returns, insiders, short interest, fu
   assert.match(pt.Swings.text, /1,50/);
 });
 
+check('research: a fund by its costs, size, holdings, payouts - and in the depot by what it holds', () => {
+  const an = { key: 'IE0000000001', name: 'Europe ETF', type: 'FUND', isin: 'IE0000000001', profile: null, annual: [], notes: [],
+               fund: { ter: 0.3, size: 50e6, use: 'distributing', equity: true, replication: 'sampling', index: 'MSCI EUROPE INDEX',
+                       holdings: [{ name: 'ASML Holding', isin: 'NL0010273215', pct: 9.7 }, { name: 'Allianz', isin: 'DE0008404005', pct: 3 }],
+                       countries: [{ name: 'Netherlands', pct: 60 }, { name: 'Germany', pct: 40 }], sectors: [{ name: 'Technology', pct: 100 }],
+                       currencies: [{ name: 'EUR', pct: 90 }, { name: 'USD', pct: 10 }], vsIndex: { '1Y': -0.1, '3Y': -0.6 },
+                       returns: { y1: 14, y3: 55, years: [] }, risk: {},
+                       payouts: [{ date: '2025-12-11', amount: 0.5 }, { date: '2026-06-11', amount: 1.5 }] } };
+  const depot = { cash: 0, positions: [{ key: 'USN070592100', name: 'ASML (ADR)', value: 10000, country: 'Netherlands', sector: 'Technology' },
+                                       { key: 'US0000000009', name: 'Z', value: 10000, country: 'USA', sector: 'Transport' }] };
+  const r = readout({ an, quote: { last: 50 }, depot, amount: 100, today: '2026-10-07' });
+  const pt = Object.fromEntries(r.points.map(p => [p.topic, p]));
+  assert.equal(pt.Costs.tone, 'neutral');                     // 0,30 % - between 0,20 and 0,50
+  assert.equal(pt.Size.tone, 'bad');                          // under 100 m €
+  assert.equal(pt.Tracking.tone, 'good');                     // −0,2 % a year on 3 years: within 0,5
+  assert.match(pt.Holdings.text, /already hold ASML Holding/);  // the ADR is the same company
+  assert.equal(pt.Payouts.head, '4 % yield');                 // 2 € on 50 €
+  assert.equal(pt.Index.text.includes('MSCI Europe Index'), true);
+  assert.equal(pt.Data, undefined);                           // no price, no fund date: nothing to cite
+  const c = Object.fromEntries(r.fit.countries.map(x => [x.country, x]));
+  assert.equal(c.Netherlands.after.toFixed(1), '53.3');      // the ADR 100 € + 60 % of the 100 € bought, of 300 €
+  assert.equal(c.Germany.mine && c.Netherlands.mine && !c.USA.mine, true);
+  assert.equal(r.fit.usdAfter.toFixed(1), '70.0');          // the ADR, Z and 10 % of the fund
+});
+
 check('research: Graham number, Buffett checks, Lynch ratio, Ackman checks by their rules', () => {
   // 100 shares at 10 $: EPS 1, book 4 a share, analysts 1 -> 1,21 in two years (+10 % a year)
   const an = { key: 'US0000000002', name: 'Y', type: 'STOCK', isin: 'US0000000002', profile: {}, annual: [], notes: [],

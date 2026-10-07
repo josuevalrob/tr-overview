@@ -1641,14 +1641,14 @@ function drawFit() {
     <div class="tiles" style="margin-top:0">
       <div class="tile"><div class="k">${esc(d.name)} in the depot</div><div class="v ${f.weightAfter >= 25 ? 'down' : ''}">${N0.format(f.weightAfter)} %</div><div class="s">now ${N0.format(f.weightBefore)} %</div></div>
       <div class="tile"><div class="k">Largest position${a ? ' after' : ''}</div><div class="v">${N0.format(f.largestAfter.weight)} %</div><div class="s">${esc(f.largestAfter.name)}</div></div>
-      <div class="tile"><div class="k">In US dollars</div><div class="v">${N0.format(f.usdAfter)} %</div><div class="s">now ${N0.format(f.usdBefore)} % · US ISIN, ADRs too</div></div>
+      <div class="tile"><div class="k">In US dollars</div><div class="v">${N0.format(f.usdAfter)} %</div><div class="s">now ${N0.format(f.usdBefore)} % · US ISIN, ADRs too${d.fund ? ', a fund by its holdings' : ''}</div></div>
     </div>
     <div class="row" style="margin:16px 0 6px"><h3 style="margin:0;font-size:13px">Share by ${R.by}</h3>
       <div class="seg" id="r-by"><button data-a="position">Position</button><button data-a="sector">Sector</button><button data-a="country">Country</button></div></div>
     <div class="keys" style="margin:0 0 8px"><span><i style="background:var(--axis)"></i>now</span><span><i style="background:var(--s1)"></i>after</span></div>
     <div class="cmp">${top.map(c => `<span class="lbl" title="${esc(label(c))}">${c.mine ? `<b>${esc(label(c))}</b>` : esc(label(c))}</span><span class="bars">${bar(c.before, '--axis')}${bar(c.after, '--s1')}</span>
       <span class="num">${N0.format(c.before)} → <b>${N0.format(c.after)} %</b></span>`).join('')}</div>
-    <p class="note">Share of stocks + crypto at today's prices${rows.length > top.length ? `; ${rows.length - top.length} smaller not shown` : ''}. ${R.by === 'country' ? 'Country is where the company is based, not where it sells. ' : ''}In bold: where ${esc(d.name)} goes.</p>`;
+    <p class="note">Share of stocks + crypto at today's prices${rows.length > top.length ? `; ${rows.length - top.length} smaller not shown` : ''}. ${R.by === 'country' ? 'Country is where the company is based, not where it sells. ' : ''}${d.fund && R.by !== 'position' ? `${esc(d.name)} counts by what it holds. ` : ''}In bold: where ${esc(d.name)} goes.</p>`;
   $('#r-by').querySelectorAll('button').forEach(btn => {
     btn.setAttribute('aria-pressed', String(btn.dataset.a === R.by));
     btn.onclick = () => { R.by = btn.dataset.a; store.set('tro.rby', R.by); drawFit(); };
