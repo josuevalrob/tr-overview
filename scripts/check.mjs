@@ -218,6 +218,37 @@ check('research: Graham number, Buffett checks, Lynch ratio, Ackman checks by th
   assert.equal(pt.Ackman.tone, 'good');
 });
 
+check('research: home listings - estimates on another profit, next 12 months, dividend record, balance sheet as filed', () => {
+  // analysts expect 3 € for 2026 against 1 € reported: another profit (Brookfield: distributable earnings vs IFRS)
+  const eps = [0.5, 0.55, 0.6, 0.62, 0.7, 0.8, 0.9, 0.95, 1, 1];
+  const dps = [0.2, 0.22, 0.24, 0.26, 0.28, 0.3, 0.32, 0.16, 0.18, 0.21];          // 2023: the year after a spin-off
+  const an = { key: 'CA0000000001', name: 'Z', type: 'STOCK', isin: 'CA0000000001', notes: [],
+               profile: { marketCap: 3000, marketCapCurrency: 'EUR', shares: 100 },
+               splits: [{ date: '2022-12-12', factor: 1.2439 }],
+               annual: [...eps.map((e, i) => ({ label: String(2016 + i), estimate: false, eps: e, dps: dps[i], dpsAdj: dps[i], pb: 2, divYield: 1 })),
+                        { label: '2026', estimate: true, eps: 3, dps: 0.5 }, { label: '2027', estimate: true, eps: 3.6 }],
+               reported: [{ label: '2022', equity: 400, minorities: 0, liabilities: 600, totalAssets: 1000 },
+                          { label: '2025', end: '2025-12-31', currency: 'EUR', standard: 'IFRS', netIncome: 100, equity: 500, minorities: 0,
+                            totalAssets: 1200, liabilities: 700, currentAssets: 300, currentLiabilities: 200, pretax: 120, interestPaid: 20, cash: 50 }] };
+  const r = readout({ an, closes: [], quote: { last: 30 }, today: '2026-10-07', rates: { date: '2026-10-06', bond10y: 3.5, fx: {} } });
+  const pt = Object.fromEntries(r.points.map(p => [p.topic, p]));
+  assert.equal(r.stats.pe, 30);                                       // on the reported 1 €
+  assert.equal(Math.round(r.stats.ntmPe * 100), 867);                 // 23 % of 2026 left: 0,23 × 3 + 0,77 × 3,6
+  assert.equal(r.stats.peg, undefined);                               // onvista's PEG mixes the two profits
+  assert.match(pt.Valuation.text, /3× the reported 1,00 €/);
+  assert.equal(Math.round(r.stats.lynchGrowth), 20);                  // 3 -> 3,6: estimate to estimate
+  assert.equal(r.stats.lynchRatio.toFixed(2), '2.10');                // (20 + 1) ÷ P/E 10 on 2026
+  assert.equal(pt.Outlook.tone, 'good');
+  assert.deepEqual(pt.Dividend.checks.map(c => c.ok), [true, true, true]);   // 21 % paid out; the spin-off drop is no cut
+  assert.equal(pt.Dividend.tone, 'good');
+  assert.equal(r.stats.interestCover, 7);                             // (120 + 20) ÷ 20
+  assert.equal(pt['Balance sheet'].tone, 'good');                     // liabilities 1,4× equity, from 1,5×
+  assert.equal(pt.Returns.head, 'ROE 20 %');
+  assert.equal(Math.round(r.stats.earningsGrowthYearly * 10), 74);    // 0,7 € (2020) -> 1 € (2025)
+  const bank = readout({ an: { ...an, profile: { ...an.profile, kind: 'bank' } }, closes: [], quote: { last: 30 }, today: '2026-10-07' });
+  assert.equal(bank.points.find(p => p.topic === 'Balance sheet').tone, 'neutral');
+});
+
 check('company numbers: change on a year before, as reported when given; lines judge growth or level', () => {
   const f = K.clean({ company: 'X', isin: 'US0000000001', metrics: [
     { id: 'gmv', label: 'GMV', unit: '$bn' }, { id: 'npl', label: 'NPL', unit: '%' }, { id: 'loans', label: 'Loans', unit: '$bn' }],
