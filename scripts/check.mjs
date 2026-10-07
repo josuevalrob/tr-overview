@@ -288,7 +288,7 @@ check('company numbers: change on a year before, as reported when given; lines j
   assert.throws(() => K.clean({ metrics: [{ id: 'a', label: 'A', unit: '$m', earnings: true }, { id: 'b', label: 'B', unit: '$m', earnings: true }] }));
 });
 
-check('the MCP server and the page script parse', () => {
+check('the MCP server and the web server parse', () => {
   // a stray quote in a tool description stops the MCP server from starting at all
   for (const f of ['mcp.mjs', 'server.mjs']) execFileSync(process.execPath, ['--check', path.join(HERE, '..', f)], { stdio: 'pipe' });
 });
