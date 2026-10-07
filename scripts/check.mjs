@@ -268,16 +268,24 @@ check('research: home listings - estimates on another profit, next 12 months, di
 check('research: Nasdaq\'s last year lags onvista\'s - the newer one counts', () => {
   // Nasdaq to Aug 2025 with 1 $ a share; onvista already has 25/26 with 8 €
   const an = { key: 'US0000000003', name: 'M', type: 'STOCK', isin: 'US0000000003', notes: [], profile: { shares: 100 },
-               annual: [{ label: '24/25', eps: 1, revenue: 300, netIncome: 100 }, { label: '25/26', eps: 8, revenue: 1000, netIncome: 800 },
-                        { label: '26/27', estimate: true, eps: 16 }],
+               annual: [{ label: '23/24', eps: 1.2, revenue: 400, netIncome: 120 }, { label: '24/25', eps: 1, revenue: 300, netIncome: 100 },
+                        { label: '25/26', eps: 8, revenue: 1000, netIncome: 800, roe: 60, ebitMargin: 70 }, { label: '26/27', estimate: true, eps: 16 }],
                us: { price: 100, market: { marketCap: 10000 }, epsForecast: [{ year: '2027', eps: 18 }],
-                     years: [{ period: '2024-08-29', revenue: 250, netIncome: 80 }, { period: '2025-08-28', revenue: 330, netIncome: 100 }] } };
+                     years: [{ period: '2024-08-29', revenue: 250, netIncome: 80 },
+                             { period: '2025-08-28', revenue: 330, netIncome: 100, operatingCashFlow: 120, capex: -100, equity: 500, totalAssets: 900, cash: 10, longDebt: 50 }] } };
   const r = readout({ an, closes: [], quote: { last: 80 }, today: '2026-10-07' });
   const pt = Object.fromEntries(r.points.map(p => [p.topic, p]));
   assert.equal(r.stats.pe, 10);                                       // 80 € ÷ 8 €, not 10.000 $ ÷ 100 $ = 100
   assert.equal(pt.Valuation.head, 'P/E 5 on 26/27 est. · 10 on 25/26');
   assert.match(pt.Growth.text, /^Revenue 25\/26/);
   assert.match(pt.Data.text, /onvista already has 25\/26: the newer one is used/);
+  // its cash flow and balance sheet stay out too: 20 $ free cash flow a year ago is no yield on today's price
+  assert.equal(r.stats.fcfYield, undefined);
+  assert.equal(pt['Balance sheet'], undefined);
+  // Ackman with two checks known (revenue fell in 24/25, margin 70 %): too few to judge - grey, not red
+  assert.deepEqual(pt.Ackman.checks.map(c => c.ok), [null, false, true, null, null]);
+  assert.equal(pt.Ackman.tone, 'neutral');
+  assert.match(pt.Ackman.text, /too few to judge/);
 });
 
 check('company numbers: change on a year before, as reported when given; lines judge growth or level', () => {
