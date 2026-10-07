@@ -1479,11 +1479,14 @@ function renderResearch() {
   }
 }
 
-/** P/E by day and the stock's own middle P/E as a flat line. */
+/** P/E by day and the stock's own middle P/E as a flat line; your buys green, sells red, at the P/E then. */
 function renderPe() {
   const p = R.data?.pe, host = $('#r-pe');
   if (!p || !host) return;
-  timeChart(host, { dates: p.dates, H: 200, series: [{ name: 'P/E', color: '--s1', values: p.values },
+  const near = dt => { const j = p.dates.findIndex(x => x >= dt); return j < 0 ? p.dates.length - 1 : j; };
+  const markers = (S.data?.trades?.[R.data.key] || []).filter(t => t.date >= p.dates[0])
+    .map(t => ({ i: near(t.date), kind: t.type === 'SELL' ? 'sell' : 'buy', text: `${shares(t.shares)} @ ${price(t.price)}` }));
+  timeChart(host, { dates: p.dates, H: 200, markers, series: [{ name: 'P/E', color: '--s1', values: p.values },
                                                    { name: 'Its middle', color: '--other', values: p.dates.map(() => p.median) }],
     fmtTick: v => `${N0.format(v)}×`, fmtVal: v => (v == null ? 'loss or over 100' : `${nf(0, 1).format(v)}×`) });
 }
@@ -1774,7 +1777,7 @@ async function loadSummary(live = false) {
     renderMeta(); renderToday(); renderMonths(); renderTaxes();
     // holdings may have changed: news follows them (not on the minute tick - headlines move slower)
     if (!live) { if ($('#tab-news').classList.contains('on')) loadNews(); else S.news = null; }
-    if (!live && $('#tab-research').classList.contains('on')) renderResearchChips();
+    if (!live && $('#tab-research').classList.contains('on')) { renderResearchChips(); renderPe(); }   // trades for its marks
     else if (S.news) renderNews();
   } catch (e) { $('#meta').innerHTML = `<span class="down">${esc(e.message)}</span>`; }
 }
