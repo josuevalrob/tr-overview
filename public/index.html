@@ -613,12 +613,6 @@ function renderToday() {
         <tbody>${rows}</tbody>
         <tfoot><tr><td>Total</td><td></td><td></td><td>${move(d.day, d.dayPct)}<span class="small">${signed(d.day)}</span></td><td>${eur(d.value)}</td><td>${eur(d.cost)}</td><td class="gain">${gainCell(d.value - d.cost, d.cost ? (d.value / d.cost - 1) * 100 : null)}</td><td></td></tr></tfoot>
       </table></div>
-    </div>
-    <div class="card">
-      <h2>Gain since bought: the price or the currency?</h2>
-      <p class="sub" id="fx-note"></p>
-      <div class="legend"><span><i class="sq" style="background:var(--s1)"></i>Price, in its own currency</span><span><i class="sq" style="background:var(--s2)"></i>That currency against the euro</span></div>
-      <div class="contrib fxs" id="fxsplit"></div>
     </div>`;
   el.insertAdjacentHTML('beforeend', `
     <div class="pair">
@@ -633,6 +627,12 @@ function renderToday() {
             <div class="seg" id="alloc-view"><button data-v="bars">Bars</button><button data-v="pie">Pie</button></div></div></div>
         <div id="alloc"></div>
       </div>
+    </div>
+    <div class="card">
+      <h2>Gain since bought: the price or the currency?</h2>
+      <p class="sub" id="fx-note"></p>
+      <div class="legend"><span><i class="sq" style="background:var(--s1)"></i>Price, in its own currency</span><span><i class="sq" style="background:var(--s2)"></i>That currency against the euro</span></div>
+      <div class="contrib fxs" id="fxsplit"></div>
     </div>`);
   el.querySelectorAll('tr[data-key]').forEach(tr => tr.onclick = () => openAnalysis(tr.dataset.key));
   el.querySelectorAll('.gain').forEach(c => c.onclick = ev => {
