@@ -459,6 +459,18 @@ check('sector: by onvista\'s industry - an online shop is Consumer, not Technolo
   assert.equal(sectorOf({}), null);
 });
 
+check('two share classes: book value and market value over every share, not the listed class only (VW preferred)', () => {
+  // 200 preferred listed of 500 shares: equity 175.000 €, 350 € a share over all of them
+  const an = { key: 'DE0000000003', name: 'V', type: 'STOCK', isin: 'DE0000000003', notes: [],
+               profile: { shares: 200, marketCap: 200 * 777, marketCapCurrency: 'EUR' },
+               annual: [{ label: '2025', estimate: false, eps: 13, bookPerShare: 350 }],
+               reported: [{ label: '2025', equity: 175000, currency: 'EUR' }] };
+  const r = readout({ an, closes: [], quote: { last: 70 }, today: '2026-10-07' });
+  assert.equal(r.stats.bookPerShare, 350);                                // not 175.000 / 200 = 875
+  assert.equal(r.stats.grahamNumber, Math.sqrt(22.5 * 13 * 350));
+  assert.match(r.points.find(p => p.topic === 'Valuation').text, /Market value 35\.000 €/);   // 500 × 70 €
+});
+
 check('currency: the main listing\'s - where most shares trade - not the country of the ISIN', () => {
   const v = (venue, country, currency, volume4w) => ({ venue, country, currency, volume4w });
   // On: Swiss ISIN, only on the NYSE
