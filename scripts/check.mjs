@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mergeExports, replay, holdings, taxYear, taxSettings, months, xirr, annualReturns, homeCurrency, currencySplit } from '../lib/portfolio.mjs';
 import { stories, newsNames, otherNames } from '../lib/news.mjs';
-import { readout, themes, naming } from '../lib/research.mjs';
+import { readout, themes, naming, peAhead, upDown, score } from '../lib/research.mjs';
 import { dropSpikes } from '../lib/market.mjs';
 import * as K from '../lib/kpis.mjs';
 
@@ -343,6 +343,44 @@ check('research: Nasdaq\'s last year lags onvista\'s - the newer one counts', ()
   assert.deepEqual(pt.Ackman.checks.map(c => c.ok), [null, false, true, null, null]);
   assert.equal(pt.Ackman.tone, 'neutral');
   assert.match(pt.Ackman.text, /too few to judge/);
+});
+
+check('research: the P/E line goes on into the estimates, if the price stays', () => {
+  // points 181 days apart; P/E 10 now, 5 on 2027 (ends 31 Dec 2027): 3 points, EPS in a straight line
+  const pe = { dates: ['2026-01-01', '2026-07-01'], values: [12, 10] };
+  const a = peAhead(pe, [{ year: '2026', pe: 8 }, { year: '2027', pe: 5 }]);
+  assert.deepEqual(a.knots.map(k => [k.year, a.dates[k.i], a.values[k.i]]), [['2026', '2026-12-31', 8], ['2027', '2027-12-31', 5]]);
+  const b = peAhead(pe, [{ year: '2027', pe: 5 }]);
+  assert.deepEqual(b.values.map(v => +v.toFixed(2)), [7.5, 6, 5]);           // 1 ÷ (0,1 + 0,1 × 1/3), 1 ÷ (0,1 + 0,1 × 2/3), 5
+  assert.equal(b.dates.at(-1), '2027-12-31');
+  // a loss or over 100 now: nothing until the first estimate; none above 100; years already over left out
+  const c = peAhead({ dates: pe.dates, values: [12, null] }, [{ year: '2025', pe: 9 }, { year: '2027', pe: 120 }]);
+  assert.deepEqual(c.values, [null, null, null]);
+  assert.deepEqual(c.knots.map(k => k.year), ['2027']);
+  assert.equal(peAhead(pe, [{ year: '2025', pe: 9 }]), null);
+});
+
+check('research: up to the analysts\' target, down to the 200-day average or the 52-week low; the score', () => {
+  // 300 closes rising 1 € a day from 1 €: the 200-day average on the last day is (101 + ... + 300) ÷ 200 = 200,5
+  const closes = Array.from({ length: 300 }, (_, i) => [new Date(Date.UTC(2025, 9, 8) + i * 864e5).toISOString().slice(0, 10), i + 1]);
+  const at = { target: 150, low: 110, high: 300, price: 100 };                    // dollars: +50 %
+  const u = upDown(closes, 300, { ma200: 200.5, low52: 1 }, at, '2026-08-03');
+  assert.equal(Math.round(u.up), 50);
+  assert.equal(u.target, 450);                                                     // 300 € × 150 $ ÷ 100 $
+  assert.deepEqual([u.downTo, u.level, +u.down.toFixed(2)], ['200-day average', 200.5, -33.17]);
+  assert.equal(+u.ratio.toFixed(2), 1.51);
+  assert.equal(u.ma200.at(-1), 200.5);                                             // the running average ends where the stat does
+  assert.equal(u.ma200[u.dates.indexOf(closes[198][0])], null);                    // under 200 closes: none
+  // under its 200-day average: down to the 52-week low; no analysts: no up, no ratio
+  const v = upDown(closes, 150, { ma200: 200.5, low52: 120 }, null, '2026-08-03');
+  assert.deepEqual([v.up, v.downTo, Math.round(v.down), v.ratio], [null, '52-week low', -20, null]);
+  assert.equal(upDown(closes, 120, { ma200: 200.5, low52: 120 }, null, '2026-08-03'), null);   // at the low, no target: nothing to say
+  // the score: green ÷ (green + red), facts and "In your depot" left out, groups without a judged point too
+  const pts = [{ group: 'price', tone: 'good' }, { group: 'price', tone: 'bad' }, { group: 'price', tone: 'neutral' },
+               { group: 'value', tone: 'good' }, { group: 'facts', tone: 'neutral' }, { group: 'facts', tone: 'bad', topic: 'In your depot' }];
+  const sc = score(pts, [{ id: 'price', label: 'Price' }, { id: 'value', label: 'Valuation' }, { id: 'facts', label: 'Good to know' }]);
+  assert.deepEqual([sc.score, sc.good, sc.bad], [67, 2, 1]);
+  assert.deepEqual(sc.groups.map(g => [g.label, g.score]), [['Price', 50], ['Valuation', 100]]);
 });
 
 check('gain since bought splits into the price and the currency, adding up to the gain', () => {
