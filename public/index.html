@@ -422,7 +422,7 @@
             <button class="btn" type="submit">Research</button>
           </form>
           <div class="seg" id="r-group" aria-label="Group by">
-            <button data-g="none">All</button><button data-g="sector">Sector</button><button data-g="country">Country</button><button data-g="score">Score</button><button data-g="pe" title="Price ÷ profit of the last year reported (or the company's own profit measure)">P/E</button>
+            <button data-g="none">All</button><button data-g="sector">Sector</button><button data-g="country">Country</button><button data-g="currency" title="The currency its price is made in - by the country of its ISIN; an ADR (Sea, PDD) counts as US dollar">Currency</button><button data-g="score">Score</button><button data-g="pe" title="Price ÷ profit of the last year reported (or the company's own profit measure)">P/E</button>
           </div>
         </div>
         <div class="chips" id="r-chips" style="margin:0"></div>
@@ -1623,10 +1623,14 @@ async function loadResearch() {
 /** Held stocks first, then followed ones, each with its sector and country. */
 function researchList() {
   const prof = S.data?.profiles || {};
-  const held = (S.data?.positions || []).map(p => ({ key: p.key, name: p.name, held: true, ...prof[p.key] }));
+  const held = (S.data?.positions || []).map(p => ({ key: p.key, name: p.name, held: true, home: p.home, ...prof[p.key] }));
   return held.concat(S.watch.filter(w => !held.some(h => h.key === w.key))
-    .map(w => ({ key: w.key, name: w.name, held: false, sector: w.sector, country: w.country })));
+    .map(w => ({ key: w.key, name: w.name, held: false, sector: w.sector, country: w.country, home: w.home })));
 }
+const CURRENCY = { USD: 'US dollar', EUR: 'Euro', GBP: 'British pound', CHF: 'Swiss franc', CAD: 'Canadian dollar', JPY: 'Japanese yen',
+                   DKK: 'Danish krone', SEK: 'Swedish krona', NOK: 'Norwegian krone', AUD: 'Australian dollar', HKD: 'Hong Kong dollar', PLN: 'Polish złoty' };
+/** The currency its price is made in, by the country of its ISIN (an ADR like Sea's is a US one): the same rule as the gain split. */
+const currencyOf = s => s.sector === 'Crypto' ? 'Crypto' : s.sector === 'Funds & ETFs' ? 'Funds: what they hold' : CURRENCY[s.home] ?? s.home;
 /**
  * What a read-out says for grouping: its score, and its P/E - on the company's own profit measure where it
  * has one (Brookfield), else on the last year reported; a loss in that year is a loss, not an old P/E.
@@ -1670,7 +1674,7 @@ function renderResearchChips() {
   if (g === 'none') { box.className = 'chips'; box.innerHTML = list.map(chip).join(''); }
   else {
     const rest = by ? (R.loading ? 'Loading…' : by.none) : 'Unknown';
-    const label = s => (by ? by.band(f(s.key)) : s[g]) || rest;
+    const label = s => (by ? by.band(f(s.key)) : g === 'currency' ? currencyOf(s) : s[g]) || rest;
     const groups = new Map();
     for (const s of list) { const k = label(s); groups.set(k, [...(groups.get(k) ?? []), s]); }
     const keys = [...groups.keys()].sort((a, b) => (a === rest) - (b === rest)
