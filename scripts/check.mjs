@@ -590,6 +590,34 @@ check('estimates: the read-out names the source and the analysts, judges results
   assert.deepEqual([q.beats, q.misses, q.judged, Math.round(q.list[2].revenueSurprise)], [1, 2, 3, -5]);
 });
 
+check('research: the stage - revenue growing, a profit, money paid back - and the two yardsticks that fit it', () => {
+  // a loss smaller than the year before, revenue expected up: hyper growth, on sales - next 12 months of 2026 and 2027
+  const an = { key: 'CA0000000009', name: 'G', type: 'STOCK', isin: 'CA0000000009', notes: [],
+               profile: { marketCap: 1000, marketCapCurrency: 'EUR', shares: 100 },
+               annual: [{ label: '2024', estimate: false, eps: -0.2 }, { label: '2025', estimate: false, eps: -0.1 }],
+               cashflow: { currency: 'USD', years: [{ year: '2024', end: '2024-12-31', netIncome: -20, free: -5 },
+                                                    { year: '2025', end: '2025-12-31', netIncome: -10, free: -2, dividendsPaid: -5 }] },
+               estimates: { currency: 'USD', years: [{ label: '2026', end: '2026-12-31', revenue: 400, revenueGrowth: 40, revenueAnalysts: 4 },
+                                                     { label: '2027', end: '2027-12-31', revenue: 600 }] } };
+  const at = (a, last) => readout({ an: a, closes: [], quote: { last }, today: '2026-10-07', rates: { fx: { EUR: 1, USD: 1.2 } } });
+  const st = r => r.points.find(p => p.topic === 'Stage');
+  const g = at(an, 10);
+  assert.equal(st(g).head, '2 Hyper growth · fwd P/S 2,2 · P/GP –');   // 1.200 $ ÷ (23 % × 400 + 77 % × 600)
+  assert.match(st(g).text, /loss 10 \$ in 2025, smaller than in 2024; pays 0,4 % of its market value back a year \(dividend 0,4 %\) despite the loss - a token\./);
+  assert.equal(g.points.findIndex(p => p.topic === 'Stage'), g.points.findIndex(p => p.group === 'value'));   // first in Valuation
+  // a profit and 5 % paid out: capital return, on the last year's P/E
+  const pay = { ...an, cashflow: undefined, estimates: undefined,
+                annual: [{ label: '2024', estimate: false, eps: 1, revenue: 900, netIncome: 90, dps: 0.2 },
+                         { label: '2025', estimate: false, eps: 1.2, revenue: 1000, netIncome: 120, dps: 0.5 }, { label: '2026', estimate: true, eps: 1.5 }] };
+  assert.equal(st(at(pay, 10)).head, '4 Capital return · P/E 8 · P/FCF –');
+  // a token dividend is no stage: operating leverage, on P/E ahead
+  assert.equal(st(at(pay, 100)).head, '3 Operating leverage · fwd P/E 67 · P/FCF –');
+  // revenue down and analysts expect it down again: decline
+  const down = { ...pay, annual: [pay.annual[0], { ...pay.annual[1], revenue: 800 }, pay.annual[2]],
+                 estimates: { currency: 'EUR', years: [{ label: '2026', end: '2026-12-31', revenue: 760, revenueGrowth: -5 }] } };
+  assert.match(st(at(down, 10)).head, /^5 Decline · fwd P\/E 7 · /);
+});
+
 check('the MCP server and the web server parse', () => {
   // a stray quote in a tool description stops the MCP server from starting at all
   for (const f of ['mcp.mjs', 'server.mjs']) execFileSync(process.execPath, ['--check', path.join(HERE, '..', f)], { stdio: 'pipe' });
