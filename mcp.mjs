@@ -12,9 +12,11 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { createApp, berlinToday } from './lib/app.mjs';
+import { createReminders } from './lib/reminders.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const app = createApp({ dataDir: process.env.DATA_DIR || path.join(HERE, 'data') });
+const reminders = createReminders(app.dataDir);
 const VERSION = JSON.parse(fs.readFileSync(path.join(HERE, 'package.json'), 'utf8')).version;
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
@@ -354,6 +356,32 @@ const TOOLS = [
                today_pct: w.quote?.prev ? r2((w.quote.last / w.quote.prev - 1) * 100) : null, favorite: favs.includes(w.key) }));
       for (const w of watch) names.set(w.key, w.name);
       return { watchlist: watch, favorites: favs.map(k => ({ name: names.get(k) ?? k, key: k })) };
+    },
+  },
+  {
+    name: 'reminder',
+    description: 'A results-day reminder in your calendar: an event with alerts (macOS Calendar app; elsewhere an .ics file in data/reminders/ to open). One upcoming per stock - adding again moves it, e.g. when an estimated date is confirmed. Times are this machine\'s local time. list: all reminders by date; remove: a stock\'s upcoming one, event included. Take the date from the company\'s own announcement or financial calendar, and say in `what` if it is only estimated.',
+    inputSchema: { type: 'object', properties: {
+      action: { type: 'string', enum: ['add', 'list', 'remove'], description: 'Default add.' },
+      stock: { type: 'string', description: 'add/remove: name or ISIN.' },
+      date: { type: 'string', description: 'add: YYYY-MM-DD.' },
+      time: { type: 'string', description: 'add: HH:MM, when the report comes out. Default 08:00.' },
+      what: { type: 'string', description: 'add: e.g. "Q3 2026 results" or "Q3 2026 results (date estimated)". Default "results".' },
+      note: { type: 'string', description: 'add: what to watch, the call time ...' },
+      link: { type: 'string', description: 'add: the company\'s investor-relations page.' },
+      alerts: { type: 'array', items: { type: 'integer' }, description: 'add: minutes from the start, e.g. [-10080, -1440, 0] = a week before, the day before, at it. Default [-1440, 0].' },
+      calendar: { type: 'string', description: 'add (macOS): the calendar\'s name. Default: the one used last, else the first writable.' },
+    } },
+    async run(a) {
+      const action = a.action || 'add';
+      if (action === 'list') return { reminders: reminders.list() };
+      const { key, name } = await resolveStock(a.stock);
+      if (action === 'remove') {
+        const gone = await reminders.remove(key);
+        if (!gone.length) throw new Error(`no upcoming reminder for ${name}`);
+        return { removed: gone };
+      }
+      return { added: await reminders.add({ key, name, date: a.date, time: a.time, what: a.what, note: a.note, link: a.link, alerts: a.alerts, calendar: a.calendar }) };
     },
   },
   {

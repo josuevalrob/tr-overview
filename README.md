@@ -48,6 +48,7 @@ claude mcp add tr-overview -- node /absolute/path/to/tr-overview/mcp.mjs
 | `price_history` | daily closes with your buys and sells |
 | `news` | headlines for holdings, followed stocks, or one stock |
 | `watchlist` | list / add / remove followed stocks, favorite / unfavorite (the ★ on Research) |
+| `reminder` | a results-day event with alerts in your calendar (macOS Calendar; elsewhere an .ics in data/reminders/), list / remove |
 | `search_instrument` | find a stock, ETF or crypto |
 | `import_export` | import a Trade Republic CSV from a file path |
 
@@ -65,7 +66,7 @@ The monthly *Account statement* is a PDF with net amounts only (no fee, no tax) 
 
 - Uploaded exports are saved, untouched, in **`data/`** next to the app (`DATA_DIR=/some/folder` to
   move it). An older export whose every row is in the new one is replaced, so a fresh "all time"
-  export leaves a single file. Followed stocks go to `data/watchlist.json`, starred ones to `data/favorites.json`. Delete a file to undo an upload.
+  export leaves a single file. Followed stocks go to `data/watchlist.json`, starred ones to `data/favorites.json`, results-day reminders to `data/reminders.json`. Delete a file to undo an upload.
 - Nothing else is stored: prices, history, analysis and news live in memory and are gone on restart.
 - `data/` is in `.gitignore`, as is every `*.csv` except the made-up `public/sample.csv` — your
   transactions can never end up in a commit.
