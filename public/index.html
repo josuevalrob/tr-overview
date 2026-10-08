@@ -123,6 +123,7 @@
   .chip .x{color:var(--muted);padding-left:2px}
   .chip .x:hover{color:var(--critical)}
   .chip.watch{border-style:dashed}
+  .chip .fav,.btn .fav{color:var(--c4)}
   .chip .sc{font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink2)}
   .cgroups{display:grid;grid-template-columns:max-content 1fr;gap:8px 14px;align-items:baseline}
   .cgroups .gh{font-size:12px;font-weight:600;color:var(--ink2);white-space:nowrap}
@@ -422,7 +423,7 @@
             <button class="btn" type="submit">Research</button>
           </form>
           <div class="seg" id="r-group" aria-label="Group by">
-            <button data-g="none">All</button><button data-g="sector">Sector</button><button data-g="country">Country</button><button data-g="currency" title="The currency its price is made in - by the country of its ISIN; an ADR (Sea, PDD) counts as US dollar">Currency</button><button data-g="score">Score</button><button data-g="pe" title="Price ÷ profit of the last year reported (or the company's own profit measure)">P/E</button>
+            <button data-g="none">All</button><button data-g="fav" title="Your starred stocks first - ☆ on a read-out marks one">★ Favorites</button><button data-g="sector">Sector</button><button data-g="country">Country</button><button data-g="currency" title="The currency its price is made in - by the country of its ISIN; an ADR (Sea, PDD) counts as US dollar">Currency</button><button data-g="score">Score</button><button data-g="pe" title="Price ÷ profit of the last year reported (or the company's own profit measure)">P/E</button>
           </div>
         </div>
         <div class="chips" id="r-chips" style="margin:0"></div>
@@ -1595,7 +1596,7 @@ $('#add').onsubmit = async ev => {
 // colour has its rule under "?". "Follow" puts a stock on the watchlist, so it also shows in News.
 const R = { key: store.get('tro.rkey', ''), amount: Number(store.get('tro.ramt', '')) || 0, by: store.get('tro.rby', 'position'),
             open: store.get('tro.ropen', '') === '1', data: null, seq: 0,
-            group: store.get('tro.rgroup', 'none'), facts: {}, loading: false };
+            group: store.get('tro.rgroup', 'none'), facts: {}, loading: false, favs: new Set() };
 /** One read-out row: dot, topic, headline; the sentence and an investor's checks open on click. */
 function roRow(p) {
   const dot = `<span class="dot" style="background:var(${TONE[p.tone]})" aria-label="${p.tone}"></span>`;
@@ -1616,16 +1617,18 @@ document.querySelectorAll('#r-group button').forEach(b => b.onclick = () => {
 
 async function loadResearch() {
   try { S.watch = (await api('/api/watchlist')).items; } catch { /* chips from holdings only */ }
+  try { R.favs = new Set((await api('/api/favorites')).keys); } catch { /* no stars */ }
   renderResearchChips();
   if (R.key) openResearch(R.key);
   else $('#r-body').innerHTML = `<div class="card"><p class="muted" style="margin:0">Type a stock above - a name, an ISIN or a US ticker like <b>SE</b> - and pick it from the list. You get a read-out from its numbers, this week's news, and what buying it would do to your depot.</p></div>`;
 }
-/** Held stocks first, then followed ones, each with its sector and country. */
+/** Held stocks first, then followed ones, each with its sector and country, and whether it is starred. */
 function researchList() {
   const prof = S.data?.profiles || {};
   const held = (S.data?.positions || []).map(p => ({ key: p.key, name: p.name, held: true, home: p.home, ...prof[p.key] }));
   return held.concat(S.watch.filter(w => !held.some(h => h.key === w.key))
-    .map(w => ({ key: w.key, name: w.name, held: false, sector: w.sector, country: w.country, home: w.home })));
+    .map(w => ({ key: w.key, name: w.name, held: false, sector: w.sector, country: w.country, home: w.home })))
+    .map(s => ({ ...s, fav: R.favs.has(s.key) }));
 }
 const CURRENCY = { USD: 'US dollar', EUR: 'Euro', GBP: 'British pound', CHF: 'Swiss franc', CAD: 'Canadian dollar', JPY: 'Japanese yen',
                    DKK: 'Danish krone', SEK: 'Swedish krona', NOK: 'Norwegian krone', AUD: 'Australian dollar', HKD: 'Hong Kong dollar', PLN: 'Polish złoty' };
@@ -1663,18 +1666,18 @@ async function loadFacts() {
   R.loading = false;
   if (BY[R.group]) renderResearchChips();
 }
-/** The chips, flat or in groups by sector, country, score band or P/E band (with the number on each chip). */
+/** The chips, flat or in groups: favorites, sector, country, currency, score band or P/E band (with the number on each chip). */
 function renderResearchChips() {
   const list = researchList(), g = R.group, by = BY[g], f = k => R.facts[k] ?? {};
   document.querySelectorAll('#r-group button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.g === g)));
   const chip = s => { const t = by?.tag(f(s.key));
     return `<button class="chip${s.held ? '' : ' watch'}" data-k="${esc(s.key)}" aria-pressed="${R.key === s.key}">
-    ${esc(s.name)}${t != null ? `<span class="sc">${t}</span>` : ''}${s.held ? '' : `<span class="x" data-rm="${esc(s.key)}" title="Stop following">×</span>`}</button>`; };
+    ${s.fav ? '<span class="fav" aria-label="Favorite">★</span>' : ''}${esc(s.name)}${t != null ? `<span class="sc">${t}</span>` : ''}${s.held ? '' : `<span class="x" data-rm="${esc(s.key)}" title="Stop following">×</span>`}</button>`; };
   const box = $('#r-chips');
   if (g === 'none') { box.className = 'chips'; box.innerHTML = list.map(chip).join(''); }
   else {
-    const rest = by ? (R.loading ? 'Loading…' : by.none) : 'Unknown';
-    const label = s => (by ? by.band(f(s.key)) : g === 'currency' ? currencyOf(s) : s[g]) || rest;
+    const rest = by ? (R.loading ? 'Loading…' : by.none) : g === 'fav' ? 'Others' : 'Unknown';
+    const label = s => (by ? by.band(f(s.key)) : g === 'currency' ? currencyOf(s) : g === 'fav' ? (s.fav ? '★ Favorites' : null) : s[g]) || rest;
     const groups = new Map();
     for (const s of list) { const k = label(s); groups.set(k, [...(groups.get(k) ?? []), s]); }
     const keys = [...groups.keys()].sort((a, b) => (a === rest) - (b === rest)
@@ -1798,6 +1801,13 @@ function holdChart(host, s) {
 /** The company's own website as a link: its host, opening in a new tab. */
 const siteLink = url => { let h = ''; try { const u = new URL(url); if (!/^https?:$/.test(u.protocol)) return ''; h = u.host.replace(/^www\./, ''); } catch { return ''; }
   return ` · <a href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Official website (Wikidata, else Nasdaq)">${esc(h)} ↗</a>`; };
+/** The Follow and Favorite buttons after either one changed. */
+function showFollow(d) {
+  const fb = $('#r-follow'), fv = $('#r-fav');
+  if (fb) { fb.textContent = d.following ? 'Following ✓' : 'Follow'; fb.setAttribute('aria-pressed', String(d.following)); }
+  if (fv) { fv.innerHTML = favLabel(d.favorite); fv.setAttribute('aria-pressed', String(!!d.favorite)); }
+}
+const favLabel = on => on ? '<span class="fav">★</span> Favorite' : '☆ Favorite';
 function renderResearch() {
   const d = R.data, pr = d.profile, q = d.quote;
   const dayPct = q?.prev ? (q.last / q.prev - 1) * 100 : null;
@@ -1807,7 +1817,9 @@ function renderResearch() {
         <div class="id muted" style="font-size:12px">${[d.isin, pr?.symbol, pr?.sector, pr?.country].filter(Boolean).map(esc).join(' · ')}${siteLink(pr?.website)}</div>
         ${q ? `<div class="px"><span class="v">${price(q.last)}</span>${dayPct != null ? move(dayPct, dayPct) : ''}<span class="muted" style="font-size:12px">${esc(q.venue || '')}</span></div>` : ''}
       </div>
-      <div class="acts">${d.held ? '' : `<button class="btn" id="r-follow" type="button" aria-pressed="${!!d.following}"
+      <div class="acts"><button class="btn" id="r-fav" type="button" aria-pressed="${!!d.favorite}"
+          title="${d.held || d.following ? 'Star it: ★ Favorites groups them above' : 'Star it: it is followed too, so it gets a chip above'}">${favLabel(d.favorite)}</button>
+        ${d.held ? '' : `<button class="btn" id="r-follow" type="button" aria-pressed="${!!d.following}"
           title="On the watchlist it also shows in News">${d.following ? 'Following ✓' : 'Follow'}</button>`}
         <button class="btn" id="r-more" type="button">Charts &amp; financials →</button></div></div>
     ${d.held ? `<p class="note" style="margin-top:6px">You hold ${shares(d.held.shares)} · ${eur(d.held.value)} · <span class="${dir(d.held.gain)}">${signed(d.held.gain)} (${pct(d.held.gainPct)})</span> · ${N0.format(d.held.weight)} % of the depot</p>` : ''}
@@ -1907,10 +1919,31 @@ function renderResearch() {
         toast(`Following <b>${esc(item.name)}</b> - it shows in News too`);
       }
       d.following = !d.following; S.news = null;
-      fb.textContent = d.following ? 'Following ✓' : 'Follow'; fb.setAttribute('aria-pressed', String(d.following));
+      if (!d.following) { d.favorite = false; R.favs.delete(d.key); }   // the server drops the star with the chip
+      showFollow(d);
       renderResearchChips();
     } catch (e) { toast(`<span class="down">${esc(e.message)}</span>`); }
     finally { fb.disabled = false; }
+  };
+  const fv = $('#r-fav');
+  fv.onclick = async () => {
+    fv.disabled = true;
+    try {
+      if (d.favorite) {
+        await api(`/api/favorites/${encodeURIComponent(d.key)}`, { method: 'DELETE' });
+        R.favs.delete(d.key);
+        toast(`<b>${esc(d.name)}</b> is no longer a favorite`);
+      } else {
+        const r = await api(`/api/favorites/${encodeURIComponent(d.key)}`, { method: 'PUT' });
+        R.favs.add(d.key);
+        if (r.followed) { S.watch = S.watch.concat({ ...r.followed, quote: null }); d.following = true; S.news = null; }
+        toast(`<b>${esc(d.name)}</b> is a favorite${r.followed ? ' - and followed, so it shows in News too' : ''}`);
+      }
+      d.favorite = !d.favorite;
+      showFollow(d);
+      renderResearchChips();
+    } catch (e) { toast(`<span class="down">${esc(e.message)}</span>`); }
+    finally { fv.disabled = false; }
   };
   $('#r-open').onclick = () => {
     R.open = !R.open; store.set('tro.ropen', R.open ? '1' : '');

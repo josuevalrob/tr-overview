@@ -18,6 +18,9 @@
  *   GET    /api/watchlist                               followed stocks with today's move
  *   POST   /api/watchlist    {query}                    follow a name or an ISIN
  *   DELETE /api/watchlist/<key>
+ *   GET    /api/favorites                               starred keys (data/favorites.json)
+ *   PUT    /api/favorites/<key>                        star it (follows it when neither held nor followed)
+ *   DELETE /api/favorites/<key>
  *   GET    /api/intraday                               today's recorded line (records a fresh point)
  *   GET    /api/analysis/<key>                         financials, analysts, events, dividends
  *   GET    /api/research/<key>?amount=5000             read-out, news, what buying that many € does to the depot
@@ -84,6 +87,11 @@ async function api(req, url) {
     if (req.method === 'GET') return { items: await app.watchlist.list() };
     if (req.method === 'POST') return app.watchlist.add((await readJson(req)).query);
     if (req.method === 'DELETE' && part[1]) return app.watchlist.remove(decodeURIComponent(part[1]));
+  }
+  if (part[0] === 'favorites') {
+    if (req.method === 'GET') return { keys: app.favorites.list() };
+    if (req.method === 'PUT' && part[1]) return app.favorites.add(decodeURIComponent(part[1]));
+    if (req.method === 'DELETE' && part[1]) return app.favorites.remove(decodeURIComponent(part[1]));
   }
   throw Object.assign(new Error('not found'), { status: 404 });
 }

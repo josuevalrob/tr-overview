@@ -233,7 +233,7 @@ const TOOLS = [
       const f = r.fit;
       return {
         name: r.name, key: r.key, isin: r.isin, sector: r.profile?.sector ?? null, country: r.profile?.country ?? null,
-        website: r.profile?.website ?? null,
+        website: r.profile?.website ?? null, favorite: !!r.favorite,
         price_eur: r.quote?.last ?? null, today_pct: r.quote?.prev ? r2((r.quote.last / r.quote.prev - 1) * 100) : null,
         your_position: r.held && { shares: r.held.shares, value: e(r.held.value), gain_eur: e(r.held.gain), gain_pct: r2(r.held.gainPct), weight_pct: r2(r.held.weight) },
         readout: r.points.map(p => ({ group: p.group, topic: p.topic, tone: p.tone, head: p.head, text: p.text, ...(p.rule ? { rule: p.rule } : {}), ...(p.checks ? { checks: p.checks } : {}) })),
@@ -325,14 +325,23 @@ const TOOLS = [
   },
   {
     name: 'watchlist',
-    description: 'Stocks you follow without holding them (shown in News, with their daily move). List, add by name/ISIN, or remove.',
+    description: 'Stocks you follow without holding them (shown in News, with their daily move), and your favorites (a star on a held or followed stock, grouped on Research). List, add/remove by name/ISIN, or favorite/unfavorite (starring a stock neither held nor followed follows it).',
     inputSchema: { type: 'object', properties: {
-      action: { type: 'string', enum: ['list', 'add', 'remove'], description: 'Default list.' },
-      stock: { type: 'string', description: 'For add/remove: name or ISIN.' },
+      action: { type: 'string', enum: ['list', 'add', 'remove', 'favorite', 'unfavorite'], description: 'Default list.' },
+      stock: { type: 'string', description: 'For add/remove/favorite/unfavorite: name or ISIN.' },
     } },
     async run(a) {
       const action = a.action || 'list';
       if (action === 'add') return { added: await app.watchlist.add(a.stock) };
+      if (action === 'favorite') {
+        const { key, name } = await resolveStock(a.stock), r = await app.favorites.add(key);
+        return { favorite: r.followed?.name ?? name, ...(r.followed ? { now_following: true } : {}) };
+      }
+      if (action === 'unfavorite') {
+        const { key, name } = await resolveStock(a.stock);
+        if (!app.favorites.remove(key).removed) throw new Error(`"${a.stock}" is not a favorite`);
+        return { unfavorited: name };
+      }
       if (action === 'remove') {
         const w = app.watchRaw(), t = String(a.stock || '').toLowerCase();
         const hit = w.find(x => x.key.toLowerCase() === t || x.name.toLowerCase().includes(t));
@@ -340,8 +349,11 @@ const TOOLS = [
         app.watchlist.remove(hit.key);
         return { removed: hit.name };
       }
-      return { watchlist: (await app.watchlist.list()).map(w => ({ name: w.name, key: w.key, price: w.quote?.last ?? null,
-               today_pct: w.quote?.prev ? r2((w.quote.last / w.quote.prev - 1) * 100) : null })) };
+      const favs = app.favorites.list(), names = new Map(app.rows().filter(r => r.key).map(r => [r.key, r.name || r.key]));
+      const watch = (await app.watchlist.list()).map(w => ({ name: w.name, key: w.key, price: w.quote?.last ?? null,
+               today_pct: w.quote?.prev ? r2((w.quote.last / w.quote.prev - 1) * 100) : null, favorite: favs.includes(w.key) }));
+      for (const w of watch) names.set(w.key, w.name);
+      return { watchlist: watch, favorites: favs.map(k => ({ name: names.get(k) ?? k, key: k })) };
     },
   },
   {
