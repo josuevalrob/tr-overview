@@ -185,6 +185,24 @@
   .pie .alloc{flex:1;min-width:200px;grid-template-columns:10px minmax(0,1fr) auto}
   .pie .sw{width:10px;height:10px;border-radius:3px}
   .pie .lbl small{display:block;color:var(--muted);font-size:11.5px;white-space:normal}
+  .alloc3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 28px}
+  .alloc3 h3{margin:0 0 10px;font-size:13px}
+  .alloc3 .alloc{grid-template-columns:minmax(64px,130px) 1fr auto}
+  .alloc3 .pie .alloc{grid-template-columns:10px minmax(0,1fr) auto}
+  @media (max-width:900px){ .alloc3{grid-template-columns:1fr} }
+  .heat{position:relative;height:300px;border-radius:8px;overflow:hidden}
+  .heat .t,.heat-follow .t{box-sizing:border-box;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;
+       justify-content:center;align-items:center;text-align:center;line-height:1.25;font-size:12px;padding:4px 6px}
+  .heat .t{position:absolute;border:1px solid var(--surface)}
+  .heat .t b,.heat-follow .t b{font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .heat .t span,.heat-follow .t span{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .heat .t.s b{display:none}
+  .heat .t.xs span{display:none}
+  .heat-follow{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:2px}
+  .heat-follow .t{height:44px;border-radius:4px}
+  .heat-key{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .heat-key i{flex:0 0 120px;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--down),var(--raised),var(--up))}
+  @media (max-width:600px){ .heat{height:240px} }
   .rings{display:grid;grid-template-columns:1fr 1fr;gap:18px 28px}
   .rings h3,.gl h3{margin:0 0 10px;font-size:13px}
   .gl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px 28px}
@@ -468,6 +486,7 @@ function showTab(name) {
   document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('on', s.id === `tab-${name}`));
   if (history.replaceState) history.replaceState(null, '', `#${name}`);
   if (name === 'months') renderMonths();               // charts need a measured width
+  if (name === 'today' && S.data && !S.data.empty) renderHeat();
   if (name === 'news' && !S.news) loadNews();
   if (name === 'research') loadResearch();
 }
@@ -640,10 +659,20 @@ function renderToday() {
         <div class="contrib" id="contrib"></div>
       </div>
       <div class="card">
-        <div class="row"><div><h2>Allocation</h2><p class="sub" style="margin:0" id="alloc-note"></p></div>
-          <div class="ctrls"><div class="seg" id="alloc-by"><button data-a="position">Position</button><button data-a="sector">Sector</button><button data-a="country">Country</button></div>
-            <div class="seg" id="alloc-view"><button data-v="bars">Bars</button><button data-v="pie">Pie</button></div></div></div>
-        <div id="alloc"></div>
+        <h2>Heatmap</h2>
+        <p class="sub">Size: what each position is worth. Colour: today against yesterday's close, full at ±3 %. Click one for its analysis.</p>
+        <div class="heat" id="heat"></div>
+        <div id="heat-follow"></div>
+        <div class="heat-key"><span>−3 %</span><i></i><span>+3 %</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row"><div><h2>Allocation</h2><p class="sub" style="margin:0" id="alloc-note"></p></div>
+        <div class="ctrls"><div class="seg" id="alloc-view"><button data-v="bars">Bars</button><button data-v="pie">Pie</button></div></div></div>
+      <div class="alloc3">
+        <div><h3>By position</h3><div id="alloc-position"></div></div>
+        <div><h3>By sector</h3><div id="alloc-sector"></div></div>
+        <div><h3>By country</h3><div id="alloc-country"></div></div>
       </div>
     </div>
     <div class="card">
@@ -657,7 +686,8 @@ function renderToday() {
     ev.stopPropagation();                                // a gain cell switches € / %, it does not open the sidebar
     G.pct = !G.pct; store.set('tro.gainpct', G.pct ? '1' : ''); renderToday();
   });
-  renderDepotChart(); renderIntraday(); renderContrib(); renderAllocation(); renderCurrency();
+  renderDepotChart(); renderIntraday(); renderContrib(); renderHeat(); renderAllocation(); renderCurrency();
+  api('/api/watchlist').then(w => { S.watch = w.items; renderHeat(); }).catch(() => {});   // followed: today's move
 }
 
 // ------------------------------------------------------------ months
@@ -1093,7 +1123,7 @@ const rangeStart = (key, today) => {
 const rangeSeg = (id, keys, cur) => `<div class="seg" id="${id}">${keys.map(k => `<button data-r="${k}" aria-pressed="${k === cur}">${k}</button>`).join('')}</div>`;
 
 // ------------------------------------------------------------ depot over time + allocation (Today)
-const D = { range: store.get('tro.drange', '1M'), alloc: store.get('tro.alloc', 'position'),
+const D = { range: store.get('tro.drange', '1M'),
             allocView: store.get('tro.allocview', 'bars') };
 
 function renderDepotChart() {
@@ -1208,6 +1238,73 @@ function renderContrib() {
 }
 
 /**
+ * Squarified treemap (Bruls, Huizing, van Wijk): items largest first, each { a } an area that together fill w × h.
+ * A row goes along the short side and takes the next item while that keeps its tiles closer to square.
+ */
+function squarify(items, x, y, w, h) {
+  const worst = (row, s) => {
+    const sum = row.reduce((t, r) => t + r.a, 0), hi = Math.max(...row.map(r => r.a)), lo = Math.min(...row.map(r => r.a));
+    return Math.max((s * s * hi) / (sum * sum), (sum * sum) / (s * s * lo));
+  };
+  const out = [];
+  for (let i = 0; i < items.length;) {
+    const s = Math.min(w, h);
+    let n = 1;
+    while (i + n < items.length && worst(items.slice(i, i + n + 1), s) <= worst(items.slice(i, i + n), s)) n++;
+    const row = items.slice(i, i + n), side = row.reduce((t, r) => t + r.a, 0) / s;
+    let o = 0;
+    for (const r of row) {
+      const len = r.a / side;
+      out.push(w >= h ? { ...r, x, y: y + o, w: side, h: len } : { ...r, x: x + o, y, w: len, h: side });
+      o += len;
+    }
+    if (w >= h) { x += side; w -= side; } else { y += side; h -= side; }
+    i += n;
+  }
+  return out;
+}
+
+/**
+ * Heatmap: a tile per position, its size what it is worth, its colour today's move - green up, red down, full at
+ * ±3 %. Stocks you follow but do not hold have no size: a row of equal tiles under it.
+ */
+function renderHeat() {
+  const d = S.data, host = $('#heat'), strip = $('#heat-follow');
+  if (!host) return;
+  const pos = d.positions.filter(p => p.value > 0).sort((a, b) => b.value - a.value);
+  if (!pos.length) { host.innerHTML = '<span class="muted">No prices yet.</span>'; return; }
+  const W = host.clientWidth || 600, H = host.clientHeight || 300, total = pos.reduce((s, p) => s + p.value, 0);
+  const shade = p => {
+    if (!p) return 'background:var(--raised);color:var(--ink)';
+    const a = Math.min(1, Math.abs(p) / 3);
+    return `background:color-mix(in srgb, var(${p > 0 ? '--up' : '--down'}) ${Math.round(12 + 88 * a)}%, var(--raised));color:${a > 0.5 ? '#fff' : 'var(--ink)'}`;
+  };
+  const tiles = squarify(pos.map(p => ({ p, a: (p.value / total) * W * H })), 0, 0, W, H);
+  host.innerHTML = tiles.map((t, i) => `<div class="t${t.w < 64 || t.h < 38 ? ' s' : ''}${t.w < 52 || t.h < 18 ? ' xs' : ''}" data-i="${i}"
+      style="left:${(t.x / W) * 100}%;top:${(t.y / H) * 100}%;width:${(t.w / W) * 100}%;height:${(t.h / H) * 100}%;${shade(t.p.dayPct)}">
+      <b>${esc(t.p.name)}</b><span>${pct(t.p.dayPct)}</span></div>`).join('');
+  host.querySelectorAll('.t').forEach(el => {
+    const p = tiles[el.dataset.i].p;
+    el.onclick = () => openAnalysis(p.key);
+    el.onpointermove = ev => showTip(ev, `<div class="t">${esc(p.name)}</div>` + tipRow('Today', pct(p.dayPct)) + tipRow('Today in €', signed(p.day))
+      + tipRow('Value', eur(p.value)) + tipRow('Weight', `${N0.format((p.value / total) * 100)} %`));
+    el.onpointerleave = hideTip;
+  });
+  const held = new Set(d.positions.map(p => p.key));
+  const follow = S.watch.filter(w => !held.has(w.key))
+    .map(w => ({ ...w, dayPct: w.quote?.last && w.quote?.prev ? (w.quote.last / w.quote.prev - 1) * 100 : null }));
+  strip.innerHTML = follow.length ? `<h3 style="margin:12px 0 6px;font-size:13px">Following, not held</h3><div class="heat-follow">${follow.map((w, i) =>
+    `<div class="t" data-i="${i}" style="${shade(w.dayPct)}"><b>${esc(w.name)}</b><span>${pct(w.dayPct)}</span></div>`).join('')}</div>` : '';
+  strip.querySelectorAll('.t').forEach(el => {
+    const w = follow[el.dataset.i];
+    el.onclick = () => openAnalysis(w.key);
+    el.onpointermove = ev => showTip(ev, `<div class="t">${esc(w.name)}</div>` + tipRow('Today', pct(w.dayPct))
+      + (w.quote?.last ? tipRow('Price', price(w.quote.last)) : ''));
+    el.onpointerleave = hideTip;
+  });
+}
+
+/**
  * Gain since bought, the price or the currency: per position two bars from the zero line - the
  * price in its own currency (blue) and that currency against the euro (orange). Same sign: stacked,
  * the price at the line; opposite signs: one each side. The number is the currency's part.
@@ -1296,32 +1393,31 @@ function donut(host, list, { total, big, small, share, more: extra, tip, rest = 
   });
 }
 function renderAllocation() {
-  const d = S.data, host = $('#alloc');
-  if (!host) return;
+  const d = S.data;
+  if (!$('#alloc-position')) return;
   const pos = d.positions.filter(p => p.value != null);
   const total = pos.reduce((s, p) => s + p.value, 0) || 1;
-  const groups = new Map();
-  for (const p of pos) {
-    const k = D.alloc === 'position' ? p.name : (d.profiles?.[p.key]?.[D.alloc] ?? 'Unknown');
-    groups.set(k, (groups.get(k) || 0) + p.value);
-  }
-  const list = [...groups].sort((a, b) => b[1] - a[1]), top = list[0]?.[1] || 1;
   const share = v => `${N0.format(v / total * 100)} %`;
-  if (D.allocView === 'pie') {
-    donut(host, list.map(([k, v]) => ({ k, v })), { total, big: eur0(total), small: 'stocks + crypto',
-      share, more: eur0, tip: (x, color) => tipRow('Share', share(x.v), color) + tipRow('Value', eur(x.v)) });
-  } else {
-    host.innerHTML = `<div class="alloc">${list.map(([k, v]) => `<span class="lbl" title="${esc(k)}">${esc(k)}</span>
-      <span><span class="bar" style="display:block;width:${(v / top) * 100}%"></span></span>
-      <span class="num">${share(v)}<small>${eur0(v)}</small></span>`).join('')}</div>`;
+  let biggest = null;
+  for (const by of ['position', 'sector', 'country']) {
+    const host = $(`#alloc-${by}`), groups = new Map();
+    for (const p of pos) {
+      const k = by === 'position' ? p.name : (d.profiles?.[p.key]?.[by] ?? 'Unknown');
+      groups.set(k, (groups.get(k) || 0) + p.value);
+    }
+    const list = [...groups].sort((a, b) => b[1] - a[1]), top = list[0]?.[1] || 1;
+    if (by === 'position') biggest = list[0];
+    if (D.allocView === 'pie') {
+      donut(host, list.map(([k, v]) => ({ k, v })), { total, big: eur0(total), small: 'stocks + crypto',
+        share, more: eur0, tip: (x, color) => tipRow('Share', share(x.v), color) + tipRow('Value', eur(x.v)) });
+    } else {
+      host.innerHTML = `<div class="alloc">${list.map(([k, v]) => `<span class="lbl" title="${esc(k)}">${esc(k)}</span>
+        <span><span class="bar" style="display:block;width:${(v / top) * 100}%"></span></span>
+        <span class="num">${share(v)}<small>${eur0(v)}</small></span>`).join('')}</div>`;
+    }
   }
-  const biggest = list[0];
   $('#alloc-note').textContent = biggest && biggest[1] / total > 0.4
     ? `${biggest[0]} is ${share(biggest[1])} of your stocks + crypto.` : '';
-  document.querySelectorAll('#alloc-by button').forEach(btn => {
-    btn.setAttribute('aria-pressed', String(btn.dataset.a === D.alloc));
-    btn.onclick = () => { D.alloc = btn.dataset.a; store.set('tro.alloc', D.alloc); renderAllocation(); };
-  });
   document.querySelectorAll('#alloc-view button').forEach(btn => {
     btn.setAttribute('aria-pressed', String(btn.dataset.v === D.allocView));
     btn.onclick = () => { D.allocView = btn.dataset.v; store.set('tro.allocview', D.allocView); renderAllocation(); };
@@ -2125,7 +2221,7 @@ async function loadSummary(live = false) {
   } catch (e) { $('#meta').innerHTML = `<span class="down">${esc(e.message)}</span>`; }
 }
 let resizeT;
-addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { renderMonths(); if (S.data && !S.data.empty) { renderDepotChart(); renderIntraday(); } renderPe(); renderUd(); }, 150); });
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { renderMonths(); if (S.data && !S.data.empty) { renderDepotChart(); renderIntraday(); renderHeat(); } renderPe(); renderUd(); }, 150); });
 // live: every number on the page refreshes every minute while it is on screen, with prices
 // under a minute old - the same request also records the Today line's next point
 setInterval(() => {
