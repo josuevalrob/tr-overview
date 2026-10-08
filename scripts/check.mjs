@@ -13,6 +13,7 @@ import { stories, newsNames, otherNames } from '../lib/news.mjs';
 import { readout, themes, naming, peAhead, upDown, score } from '../lib/research.mjs';
 import { dropSpikes } from '../lib/market.mjs';
 import * as K from '../lib/kpis.mjs';
+import { sectorOf } from '../lib/analysis.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const text = fs.readFileSync(path.join(HERE, '..', 'public', 'sample.csv'), 'utf8');
@@ -426,6 +427,16 @@ check('company numbers: change on a year before, as reported when given; lines j
   assert.equal(own.period, 'Q3 2025–Q2 2026');
   assert.equal(K.ownMeasure({ ...de, quarters: de.quarters.filter(q => q.period !== '2025-Q4') }, { shares: 1, fx: { USD: 1 } }), null);
   assert.throws(() => K.clean({ metrics: [{ id: 'a', label: 'A', unit: '$m', earnings: true }, { id: 'b', label: 'B', unit: '$m', earnings: true }] }));
+});
+
+check('sector: by onvista\'s industry - an online shop is Consumer, not Technology; a mixed industry keeps onvista\'s sector', () => {
+  const co = (name, sector) => ({ branch: { name, sector: { name: sector } } });
+  assert.equal(sectorOf(co('Internetkommerz', 'Informationstechnologie')), 'Consumer');
+  assert.equal(sectorOf(co('Luft- und Raumfahrtindustrie', 'Transport / Verkehrssektor')), 'Industrials');
+  assert.equal(sectorOf(co('Immobilien', 'Diverse')), 'Real estate');
+  assert.equal(sectorOf(co('Sonstige Branchen', 'Diverse')), 'Diversified');
+  assert.equal(sectorOf(co('Neu', 'Chemie / Pharma / Gesundheit')), 'Health care');
+  assert.equal(sectorOf({}), null);
 });
 
 check('the MCP server and the web server parse', () => {
