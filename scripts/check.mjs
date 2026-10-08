@@ -620,6 +620,7 @@ check('research: the stage - revenue growing, a profit, money paid back - and th
   const st = r => r.points.find(p => p.topic === 'Stage');
   const g = at(an, 10);
   assert.equal(st(g).head, '2 Hyper growth · fwd P/S 2,2 · P/GP –');   // 1.200 $ ÷ (23 % × 400 + 77 % × 600)
+  assert.deepEqual([g.stats.stageBy, g.stats.stageValue.toFixed(2)], ['fwd P/S', '2.17']);   // what the Stage chips rank by
   assert.match(st(g).text, /loss 10 \$ in 2025, smaller than in 2024; pays 0,4 % of its market value back a year \(dividend 0,4 %\) despite the loss - a token\./);
   assert.equal(g.points.findIndex(p => p.topic === 'Stage'), g.points.findIndex(p => p.group === 'value'));   // first in Valuation
   // a profit and 5 % paid out: capital return, on the last year's P/E

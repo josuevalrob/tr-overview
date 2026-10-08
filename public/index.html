@@ -423,7 +423,7 @@
             <button class="btn" type="submit">Research</button>
           </form>
           <div class="seg" id="r-group" aria-label="Group by">
-            <button data-g="none">All</button><button data-g="fav" title="Your starred stocks first - ☆ on a read-out marks one">★ Favorites</button><button data-g="sector">Sector</button><button data-g="country">Country</button><button data-g="currency" title="The currency its price is made in - by the country of its ISIN; an ADR (Sea, PDD) counts as US dollar">Currency</button><button data-g="score">Score</button><button data-g="pe" title="Price ÷ profit of the last year reported (or the company's own profit measure)">P/E</button>
+            <button data-g="none">All</button><button data-g="fav" title="Your starred stocks first - ☆ on a read-out marks one">★ Favorites</button><button data-g="sector">Sector</button><button data-g="country">Country</button><button data-g="currency" title="The currency its price is made in - by the country of its ISIN; an ADR (Sea, PDD) counts as US dollar">Currency</button><button data-g="score">Score</button><button data-g="pe" title="Price ÷ profit of the last year reported (or the company's own profit measure)">P/E</button><button data-g="stage" title="How expensive, against companies in the same stage - startup, hyper growth, operating leverage, capital return, decline: cheapest first, on the yardstick that fits the stage (price/sales for a loss, P/E for a profit)">Stage</button>
           </div>
         </div>
         <div class="chips" id="r-chips" style="margin:0"></div>
@@ -1658,15 +1658,21 @@ const currencyOf = s => s.sector === 'Crypto' ? 'Crypto' : s.sector === 'Funds &
  */
 const factsOf = d => {
   const s = d.stats ?? {}, loss = s.ownPe == null && (s.netIncome < 0 || s.epsLastYear < 0);   // a loss in the last year reported
-  return { score: d.score?.score ?? null, pe: loss ? null : s.ownPe ?? s.pe ?? null, loss };
+  return { score: d.score?.score ?? null, pe: loss ? null : s.ownPe ?? s.pe ?? null, loss,
+           stage: s.stage ?? null, stageBy: s.stageBy ?? null, stageValue: s.stageValue ?? null };
 };
 const SCORE_BANDS = ['80–100', '60–79', '40–59', 'Under 40'], PE_BANDS = ['Under 15×', '15–25×', '25–40×', 'Over 40×', 'Loss'];
+const STAGE_BANDS = ['1 Startup', '1–2 Startup or hyper growth', '2 Hyper growth', '3 Operating leverage', '4 Capital return', '5 Decline'];
 /** Each group by read-out: its bands in order, a chip's band (null: none yet), the number on the chip, the order inside. */
 const BY = {
   score: { bands: SCORE_BANDS, none: 'No score', band: f => f.score == null ? null : SCORE_BANDS[f.score >= 80 ? 0 : f.score >= 60 ? 1 : f.score >= 40 ? 2 : 3],
            tag: f => f.score, rank: f => -(f.score ?? -1) },
   pe: { bands: PE_BANDS, none: 'No P/E', band: f => f.loss ? 'Loss' : f.pe == null ? null : PE_BANDS[f.pe < 15 ? 0 : f.pe < 25 ? 1 : f.pe < 40 ? 2 : 3],
         tag: f => f.pe == null ? null : `${N0.format(f.pe)}×`, rank: f => f.pe ?? Infinity },
+  // each stage on its own yardstick (lib/research.mjs, the read-out's Stage point), cheapest first
+  stage: { bands: STAGE_BANDS, none: 'No stage', band: f => f.stage,
+           tag: f => f.stage == null ? null : `${f.stageBy} ${f.stageValue == null ? '–' : nf(0, f.stageBy.endsWith('P/E') ? 0 : 1).format(f.stageValue)}`,
+           rank: f => f.stageValue ?? Infinity },
 };
 /** Every chip's read-out, three at a time - the server keeps each one, so it is asked once. */
 async function loadFacts() {
@@ -1684,7 +1690,7 @@ async function loadFacts() {
   R.loading = false;
   if (BY[R.group]) renderResearchChips();
 }
-/** The chips, flat or in groups: favorites, sector, country, currency, score band or P/E band (with the number on each chip). */
+/** The chips, flat or in groups: favorites, sector, country, currency, score band, P/E band or stage (with the number on each chip). */
 function renderResearchChips() {
   const list = researchList(), g = R.group, by = BY[g], f = k => R.facts[k] ?? {};
   document.querySelectorAll('#r-group button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.g === g)));
