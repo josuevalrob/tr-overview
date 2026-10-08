@@ -422,7 +422,7 @@
             <button class="btn" type="submit">Research</button>
           </form>
           <div class="seg" id="r-group" aria-label="Group by">
-            <button data-g="none">All</button><button data-g="sector">Sector</button><button data-g="country">Country</button><button data-g="score">Score</button>
+            <button data-g="none">All</button><button data-g="sector">Sector</button><button data-g="country">Country</button><button data-g="score">Score</button><button data-g="pe" title="Price ÷ profit of the last year reported (or the company's own profit measure)">P/E</button>
           </div>
         </div>
         <div class="chips" id="r-chips" style="margin:0"></div>
@@ -1595,7 +1595,7 @@ $('#add').onsubmit = async ev => {
 // colour has its rule under "?". "Follow" puts a stock on the watchlist, so it also shows in News.
 const R = { key: store.get('tro.rkey', ''), amount: Number(store.get('tro.ramt', '')) || 0, by: store.get('tro.rby', 'position'),
             open: store.get('tro.ropen', '') === '1', data: null, seq: 0,
-            group: store.get('tro.rgroup', 'none'), scores: {}, scoring: false };
+            group: store.get('tro.rgroup', 'none'), facts: {}, loading: false };
 /** One read-out row: dot, topic, headline; the sentence and an investor's checks open on click. */
 function roRow(p) {
   const dot = `<span class="dot" style="background:var(${TONE[p.tone]})" aria-label="${p.tone}"></span>`;
@@ -1627,44 +1627,59 @@ function researchList() {
   return held.concat(S.watch.filter(w => !held.some(h => h.key === w.key))
     .map(w => ({ key: w.key, name: w.name, held: false, sector: w.sector, country: w.country })));
 }
-const BANDS = [[80, '80–100'], [60, '60–79'], [40, '40–59'], [0, 'Under 40']];
-/** Every chip's score, three at a time - the server keeps each read-out, so it is asked once. */
-async function loadScores() {
-  const todo = researchList().map(s => s.key).filter(k => !(k in R.scores));
-  if (R.scoring || !todo.length) return;
-  R.scoring = true; renderResearchChips();
+/**
+ * What a read-out says for grouping: its score, and its P/E - on the company's own profit measure where it
+ * has one (Brookfield), else on the last year reported; a loss in that year is a loss, not an old P/E.
+ */
+const factsOf = d => {
+  const s = d.stats ?? {}, loss = s.ownPe == null && s.netIncome < 0;
+  return { score: d.score?.score ?? null, pe: loss ? null : s.ownPe ?? s.pe ?? null, loss };
+};
+const SCORE_BANDS = ['80–100', '60–79', '40–59', 'Under 40'], PE_BANDS = ['Under 15×', '15–25×', '25–40×', 'Over 40×', 'Loss'];
+/** Each group by read-out: its bands in order, a chip's band (null: none yet), the number on the chip, the order inside. */
+const BY = {
+  score: { bands: SCORE_BANDS, none: 'No score', band: f => f.score == null ? null : SCORE_BANDS[f.score >= 80 ? 0 : f.score >= 60 ? 1 : f.score >= 40 ? 2 : 3],
+           tag: f => f.score, rank: f => -(f.score ?? -1) },
+  pe: { bands: PE_BANDS, none: 'No P/E', band: f => f.loss ? 'Loss' : f.pe == null ? null : PE_BANDS[f.pe < 15 ? 0 : f.pe < 25 ? 1 : f.pe < 40 ? 2 : 3],
+        tag: f => f.pe == null ? null : `${N0.format(f.pe)}×`, rank: f => f.pe ?? Infinity },
+};
+/** Every chip's read-out, three at a time - the server keeps each one, so it is asked once. */
+async function loadFacts() {
+  const todo = researchList().map(s => s.key).filter(k => !(k in R.facts));
+  if (R.loading || !todo.length) return;
+  R.loading = true; renderResearchChips();
   let i = 0;
   await Promise.all([0, 1, 2].map(async () => {
     while (i < todo.length) {
       const k = todo[i++];
-      try { R.scores[k] = (await api(`/api/research/${encodeURIComponent(k)}`)).score?.score ?? null; } catch { R.scores[k] = null; }
-      if (R.group === 'score') renderResearchChips();
+      try { R.facts[k] = factsOf(await api(`/api/research/${encodeURIComponent(k)}`)); } catch { R.facts[k] = factsOf({}); }
+      if (BY[R.group]) renderResearchChips();
     }
   }));
-  R.scoring = false;
-  if (R.group === 'score') renderResearchChips();
+  R.loading = false;
+  if (BY[R.group]) renderResearchChips();
 }
-/** The chips, flat or in groups by sector, country or score band (with the score on each chip). */
+/** The chips, flat or in groups by sector, country, score band or P/E band (with the number on each chip). */
 function renderResearchChips() {
-  const list = researchList(), g = R.group;
+  const list = researchList(), g = R.group, by = BY[g], f = k => R.facts[k] ?? {};
   document.querySelectorAll('#r-group button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.g === g)));
-  const chip = s => `<button class="chip${s.held ? '' : ' watch'}" data-k="${esc(s.key)}" aria-pressed="${R.key === s.key}">
-    ${esc(s.name)}${g === 'score' && R.scores[s.key] != null ? `<span class="sc">${R.scores[s.key]}</span>` : ''}${s.held ? '' : `<span class="x" data-rm="${esc(s.key)}" title="Stop following">×</span>`}</button>`;
+  const chip = s => { const t = by?.tag(f(s.key));
+    return `<button class="chip${s.held ? '' : ' watch'}" data-k="${esc(s.key)}" aria-pressed="${R.key === s.key}">
+    ${esc(s.name)}${t != null ? `<span class="sc">${t}</span>` : ''}${s.held ? '' : `<span class="x" data-rm="${esc(s.key)}" title="Stop following">×</span>`}</button>`; };
   const box = $('#r-chips');
   if (g === 'none') { box.className = 'chips'; box.innerHTML = list.map(chip).join(''); }
   else {
-    const rest = g === 'score' ? (R.scoring ? 'Scoring…' : 'No score') : 'Unknown';
-    const label = s => g !== 'score' ? s[g] || rest : R.scores[s.key] == null ? rest : BANDS.find(([lo]) => R.scores[s.key] >= lo)[1];
+    const rest = by ? (R.loading ? 'Loading…' : by.none) : 'Unknown';
+    const label = s => (by ? by.band(f(s.key)) : s[g]) || rest;
     const groups = new Map();
     for (const s of list) { const k = label(s); groups.set(k, [...(groups.get(k) ?? []), s]); }
-    const order = g === 'score' ? BANDS.map(b => b[1]) : null;
     const keys = [...groups.keys()].sort((a, b) => (a === rest) - (b === rest)
-      || (order ? order.indexOf(a) - order.indexOf(b) : groups.get(b).length - groups.get(a).length || a.localeCompare(b)));
-    if (g === 'score') for (const v of groups.values()) v.sort((a, b) => (R.scores[b.key] ?? -1) - (R.scores[a.key] ?? -1));
+      || (by ? by.bands.indexOf(a) - by.bands.indexOf(b) : groups.get(b).length - groups.get(a).length || a.localeCompare(b)));
+    if (by) for (const v of groups.values()) v.sort((a, b) => by.rank(f(a.key)) - by.rank(f(b.key)));
     box.className = 'cgroups';
     box.innerHTML = keys.map(k => `<div class="gh">${esc(k)}<span>${groups.get(k).length}</span></div>
       <div class="chips">${groups.get(k).map(chip).join('')}</div>`).join('');
-    if (g === 'score') loadScores();
+    if (by) loadFacts();
   }
   $('#r-chips').querySelectorAll('.chip').forEach(c => c.onclick = async ev => {
     const rm = ev.target.closest('[data-rm]');
@@ -1689,7 +1704,7 @@ async function openResearch(key) {
     const d = await api(`/api/research/${encodeURIComponent(key)}`);
     if (seq !== R.seq) return;                       // another one was asked for meanwhile
     R.data = d; renderResearch();
-    if (R.scores[key] !== (d.score?.score ?? null)) { R.scores[key] = d.score?.score ?? null; if (R.group === 'score') renderResearchChips(); }
+    R.facts[key] = factsOf(d); if (BY[R.group]) renderResearchChips();
   } catch (e) { if (seq === R.seq) $('#r-body').innerHTML = `<div class="card"><p class="down" style="margin:0">${esc(e.message)}</p></div>`; }
 }
 /** A fund's sectors or countries as a ring; what the issuer leaves unclassified is its own slice. */
