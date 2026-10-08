@@ -471,6 +471,14 @@ check('two share classes: book value and market value over every share, not the 
   assert.match(r.points.find(p => p.topic === 'Valuation').text, /Market value 35\.000 €/);   // 500 × 70 €
 });
 
+check('P/E on the last year reported only: a loss then is no P/E, not an old year\'s (Neo: 2021 after a 2025 loss)', () => {
+  const an = { key: 'CA0000000004', name: 'N', type: 'STOCK', isin: 'CA0000000004', notes: [], profile: {},
+               annual: [{ label: '2021', estimate: false, eps: 0.81, per: 15.6 }, { label: '2025', estimate: false, eps: -0.21 }] };
+  const r = readout({ an, closes: [], quote: { last: 12 }, today: '2026-10-07' });
+  assert.equal(r.stats.pe ?? null, null);
+  assert.equal(r.points.find(p => p.topic === 'Graham').text.includes('no profit in 2025'), true);
+});
+
 check('currency: the main listing\'s - where most shares trade - not the country of the ISIN', () => {
   const v = (venue, country, currency, volume4w) => ({ venue, country, currency, volume4w });
   // On: Swiss ISIN, only on the NYSE

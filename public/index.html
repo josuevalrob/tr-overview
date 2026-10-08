@@ -1636,7 +1636,7 @@ const currencyOf = s => s.sector === 'Crypto' ? 'Crypto' : s.sector === 'Funds &
  * has one (Brookfield), else on the last year reported; a loss in that year is a loss, not an old P/E.
  */
 const factsOf = d => {
-  const s = d.stats ?? {}, loss = s.ownPe == null && s.netIncome < 0;
+  const s = d.stats ?? {}, loss = s.ownPe == null && (s.netIncome < 0 || s.epsLastYear < 0);   // a loss in the last year reported
   return { score: d.score?.score ?? null, pe: loss ? null : s.ownPe ?? s.pe ?? null, loss };
 };
 const SCORE_BANDS = ['80–100', '60–79', '40–59', 'Under 40'], PE_BANDS = ['Under 15×', '15–25×', '25–40×', 'Over 40×', 'Loss'];
