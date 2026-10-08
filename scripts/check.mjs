@@ -13,7 +13,7 @@ import { stories, newsNames, otherNames } from '../lib/news.mjs';
 import { readout, themes, naming, peAhead, upDown, score, results } from '../lib/research.mjs';
 import { dropSpikes } from '../lib/market.mjs';
 import * as K from '../lib/kpis.mjs';
-import { sectorOf, markFiled, mergeEstimates, fyLabel } from '../lib/analysis.mjs';
+import { sectorOf, mainListing, markFiled, mergeEstimates, fyLabel } from '../lib/analysis.mjs';
 import { parseEstimates } from '../lib/yahoo.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -449,6 +449,27 @@ check('sector: by onvista\'s industry - an online shop is Consumer, not Technolo
   assert.equal(sectorOf(co('Sonstige Branchen', 'Diverse')), 'Diversified');
   assert.equal(sectorOf(co('Neu', 'Chemie / Pharma / Gesundheit')), 'Health care');
   assert.equal(sectorOf({}), null);
+});
+
+check('currency: the main listing\'s - where most shares trade - not the country of the ISIN', () => {
+  const v = (venue, country, currency, volume4w) => ({ venue, country, currency, volume4w });
+  // On: Swiss ISIN, only on the NYSE
+  assert.deepEqual(mainListing([v('NYSE', 'US', 'USD', 3e7), v('Tradegate', 'DE', 'EUR', 9e3)], 'CH1134540470'), { venue: 'NYSE', currency: 'USD' });
+  assert.equal(mainListing([v('London Stock Exchange', 'GB', 'GBp', 2e6), v('Nasdaq OTC', 'US', 'USD', 1e3)], 'GB0003718474').currency, 'GBP');   // pence
+  // Neo: more OTC and Tradegate volume than on the one Toronto venue - still Canadian dollars
+  assert.equal(mainListing([v('Nasdaq OTC', 'US', 'USD', 1.6e6), v('Tradegate BSX', 'DE', 'EUR', 8.8e4), v('Toronto CNSX', 'CA', 'CAD', 3e4)], 'CA64046G1063').currency, 'CAD');
+  // Brookfield: NYSE and Toronto - the larger
+  assert.equal(mainListing([v('NYSE', 'US', 'USD', 1.2e8), v('Toronto CNSX', 'CA', 'CAD', 1.3e6)], 'CA11271J1075').currency, 'USD');
+  // a German company: Xetra, though it also trades in Zurich
+  assert.equal(mainListing([v('Xetra', 'DE', 'EUR', 5e7), v('SIX Swiss Exchange', 'CH', 'CHF', 1e3)], 'DE0007236101').currency, 'EUR');
+  assert.equal(mainListing([v('LS Exchange', 'DE', 'EUR', null), v('Toronto', 'CA', 'CAD', null)], 'CA0000000000').currency, 'CAD');   // no volumes
+  assert.equal(mainListing([v('Tradegate', 'DE', 'EUR', 5e3)], 'IE0000000000').currency, 'EUR');                          // only in Germany
+  assert.equal(mainListing([]), null);
+  const fx = { USD: [['2025-01-02', 1.10], ['2026-10-06', 1.25]] };
+  const [on] = currencySplit([{ key: 'CH1134540470', shares: 1, value: 10000, cost: 10000, gain: 0, lots: [{ date: '2025-01-02', shares: 1, cost: 10000 }] }],
+    fx, () => 'USD');
+  assert.equal(on.home, 'USD');
+  assert.ok(on.fromCurrency < 0);                                         // the dollar fell: On cost money in euros
 });
 
 check('estimates: Yahoo\'s periods, moved on when its dates lag results already out; revenue held against what came out', () => {
