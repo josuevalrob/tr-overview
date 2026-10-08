@@ -429,6 +429,14 @@ check('company numbers: change on a year before, as reported when given; lines j
   assert.equal(row('loans').change, 62.5);                              // the release's own number beats 11,1 / 6,9
   assert.deepEqual(t.rows.map(r => r.tone), ['good', 'good', null]);    // growth 30 >= 25; NPL 1,0 <= 1,5; no line
   assert.equal(t.due, false);
+  // losses: on the size of the year before - a smaller loss is up, a bigger one down, a loss to a profit up
+  const l = K.table(K.clean({ company: 'X', isin: 'DE0000000001', currency: 'EUR', metrics: [{ id: 'ni', label: 'Net income', unit: 'm' }],
+    quarters: [{ period: '2025-Q4', values: { ni: -62.8 } }, { period: '2026-Q4', values: { ni: -61.6 } }] }), {}, { today: '2026-10-07' });
+  assert.equal(l.rows[0].cells.at(-1).change.toFixed(1), '1.9');
+  const lc = (b, v) => K.table(K.clean({ company: 'X', isin: 'DE0000000001', metrics: [{ id: 'e', label: 'EBIT', unit: 'm' }],
+    quarters: [{ period: '2025-Q4', values: { e: b } }, { period: '2026-Q4', values: { e: v } }] }), {}, { today: '2026-10-07' }).rows[0].cells.at(-1).change;
+  assert.equal(Math.round(lc(-34.5, -72.1)), -109);
+  assert.equal(Math.round(lc(-10, 5)), 150);
   assert.equal(K.table(f, {}, { today: '2026-11-11', nextResults: '2026-11-10' }).due, true);
   assert.throws(() => K.clean({ metrics: [{ id: 'gmv', label: 'GMV', unit: '$bn' }], quarters: [{ period: '2026-2', values: {} }] }));
   // the company's own profit measure: four quarters in a row, per share in euros
