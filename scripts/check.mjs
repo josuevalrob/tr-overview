@@ -9,7 +9,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mergeExports, replay, holdings, taxYear, taxSettings, months, xirr, annualReturns, homeCurrency, currencySplit } from '../lib/portfolio.mjs';
-import { stories, newsNames, otherNames } from '../lib/news.mjs';
+import { stories, newsNames, otherNames, localNews } from '../lib/news.mjs';
 import { readout, themes, naming, peAhead, upDown, score, results } from '../lib/research.mjs';
 import { dropSpikes } from '../lib/market.mjs';
 import * as K from '../lib/kpis.mjs';
@@ -170,6 +170,23 @@ check('news: a sister company is not the company - "Brookfield Renewable" is not
   assert.equal(about('Brookfield Asset Management (TSX:BAM) Stock Looks Fully Priced'), false);
   assert.equal(about('Brookfield commits $444 million to ESR India warehouse parks deal'), true);
   assert.equal(about('Brookfield (NYSE:BN) and Brookfield Renewable sign AI power deal'), true);
+});
+
+check('news: a company with its name inside another\'s - "Owens Corning" (also "Owens-Corning") is not Corning; town news is not company news', () => {
+  const others = otherNames('Corning', [{ name: 'Corning', type: 'STOCK' }, { name: 'Owens Corning', type: 'STOCK' }]);
+  assert.deepEqual(others, ['Owens Corning']);
+  const about = naming(['Corning', 'GLW'], others);
+  assert.equal(about('Truist Cuts Price Target on Owens Corning to $115 From $140, Keeps Hold Rating'), false);
+  assert.equal(about('Owens-Corning Q2FY26 Results: Revenue flat at $2.8 billion, EBITDA margin holds 24%'), false);
+  assert.equal(about('Corning signs USD 3 billion deal: 18 analysts rate Corning stock Buy'), true);
+  assert.equal(localNews({ title: 'Horseheads boys soccer defeats Corning in overtime, Wednesday night scoreboard', source: 'WENY News' }), true);
+  assert.equal(localNews({ title: 'Owego Free Academy Girls Varsity Volleyball @ Corning-Painted Post', source: 'MaxPreps' }), true);
+  assert.equal(localNews({ title: 'Corning stock loses 3.15 percent versus its prior close', source: 'AD HOC NEWS' }), false);
+  assert.equal(localNews({ title: "Obituary | Joan E. Fleming Obituary (2026) - Corning, NY - Carpenter's Funeral Home", source: 'Legacy' }), true);
+  assert.equal(localNews({ title: 'Two Missouri Residents Arrested After Corning Traffic Stop, Sheriff Says', source: 'NEA Report' }), true);
+  assert.equal(localNews({ title: 'Corning has a zest for the Olive Fest', source: 'appeal-democrat.com' }), true);
+  assert.equal(localNews({ title: 'Corning Declares Quarterly Dividend, Payable on December 11, 2026', source: 'marketscreener.com' }), false);
+  assert.equal(localNews({ title: 'Amazon Thursday Night Football ratings hit a record on Prime Video', source: 'CNBC' }), false);
 });
 
 check('prices: a stray close never adjusted for a split is left out, a real jump stays', () => {
