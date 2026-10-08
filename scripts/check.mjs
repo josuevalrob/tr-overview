@@ -15,6 +15,7 @@ import { dropSpikes } from '../lib/market.mjs';
 import * as K from '../lib/kpis.mjs';
 import { sectorOf, mainListing, markFiled, mergeEstimates, fyLabel } from '../lib/analysis.mjs';
 import { pickSite } from '../lib/website.mjs';
+import { buysOf } from '../lib/congress.mjs';
 import { parseEstimates } from '../lib/yahoo.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -488,6 +489,19 @@ check('website: of several, a preferred one, else the shortest named like the co
   // Micron: country sites and a subdomain - micron.com
   assert.equal(pickSite([s('https://micron.cn'), s('https://micron.com.tw'), s('https://tw.micron.com'), s('https://www.micron.com.jp'), s('https://www.micron.com/')], 'Micron Technology'), 'https://www.micron.com/');
   assert.equal(pickSite([], 'X'), null);
+});
+
+check('politicians: US Congress members\' purchases, one row per member, day and amount; no line when none', () => {
+  const t = (member, type, date) => ({ member, chamber: 'house', state: 'LA06', type, transaction_date: date, disclosure_date: '2026-10-01', amount_range: '$1,001 - $15,000' });
+  const buys = buysOf([t('Cleo Fields', 'purchase', '2026-09-10'), t('Cleo Fields', 'purchase', '2026-09-10'), t('A B', 'sale', '2026-09-12'), t('C D', 'purchase', '2026-09-20')]);
+  assert.deepEqual(buys.map(b => b.member), ['C D', 'Cleo Fields']);       // newest first, the twice-filed one once, no sale
+  const an = { key: 'US0000000009', name: 'M', type: 'STOCK', isin: 'US0000000009', notes: [], profile: {}, annual: [], congress: buys };
+  const p = readout({ an, closes: [], quote: { last: 10 }, today: '2026-10-08' }).points.find(x => x.topic === 'Politicians');
+  assert.equal(p.group, 'market');
+  assert.equal(p.tone, 'neutral');                                         // a fact: the score does not count it
+  assert.equal(p.head, 'C D, Cleo Fields bought');
+  assert.match(p.text, /Bargo/);
+  assert.equal(readout({ an: { ...an, congress: [] }, closes: [], quote: { last: 10 }, today: '2026-10-08' }).points.some(x => x.topic === 'Politicians'), false);
 });
 
 check('currency: the main listing\'s - where most shares trade - not the country of the ISIN', () => {
