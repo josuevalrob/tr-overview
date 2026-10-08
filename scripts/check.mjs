@@ -14,6 +14,7 @@ import { readout, themes, naming, peAhead, upDown, score, results } from '../lib
 import { dropSpikes } from '../lib/market.mjs';
 import * as K from '../lib/kpis.mjs';
 import { sectorOf, mainListing, markFiled, mergeEstimates, fyLabel } from '../lib/analysis.mjs';
+import { pickSite } from '../lib/website.mjs';
 import { parseEstimates } from '../lib/yahoo.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -477,6 +478,16 @@ check('P/E on the last year reported only: a loss then is no P/E, not an old yea
   const r = readout({ an, closes: [], quote: { last: 12 }, today: '2026-10-07' });
   assert.equal(r.stats.pe ?? null, null);
   assert.equal(r.points.find(p => p.topic === 'Graham').text.includes('no profit in 2025'), true);
+});
+
+check('website: of several, a preferred one, else the shortest named like the company - not a brand\'s', () => {
+  const s = (url, preferred = false) => ({ url, preferred });
+  assert.equal(pickSite([s('https://www.alamocement.com/'), s('https://www.buzziunicemusa.com/'), s('https://www.buzzi.com'), s('https://www.dyckerhoff.com/')], 'Buzzi'), 'https://www.buzzi.com');
+  assert.equal(pickSite([s('https://brand.example/'), s('https://www.group.example/', true)], 'Group'), 'https://www.group.example/');
+  assert.equal(pickSite([s('https://investors.on-running.com/home/default.aspx')], 'On Holding'), 'https://investors.on-running.com/home/default.aspx');
+  // Micron: country sites and a subdomain - micron.com
+  assert.equal(pickSite([s('https://micron.cn'), s('https://micron.com.tw'), s('https://tw.micron.com'), s('https://www.micron.com.jp'), s('https://www.micron.com/')], 'Micron Technology'), 'https://www.micron.com/');
+  assert.equal(pickSite([], 'X'), null);
 });
 
 check('currency: the main listing\'s - where most shares trade - not the country of the ISIN', () => {

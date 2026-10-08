@@ -1795,13 +1795,16 @@ function holdChart(host, s) {
     el.onpointerleave = hideTip;
   });
 }
+/** The company's own website as a link: its host, opening in a new tab. */
+const siteLink = url => { let h = ''; try { const u = new URL(url); if (!/^https?:$/.test(u.protocol)) return ''; h = u.host.replace(/^www\./, ''); } catch { return ''; }
+  return ` · <a href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Official website (Wikidata, else Nasdaq)">${esc(h)} ↗</a>`; };
 function renderResearch() {
   const d = R.data, pr = d.profile, q = d.quote;
   const dayPct = q?.prev ? (q.last / q.prev - 1) * 100 : null;
   const head = `<div class="card">
     <div class="rhead"><div>
         <h2 style="font-size:18px">${esc(d.name)}</h2>
-        <div class="id muted" style="font-size:12px">${[d.isin, pr?.symbol, pr?.sector, pr?.country].filter(Boolean).map(esc).join(' · ')}</div>
+        <div class="id muted" style="font-size:12px">${[d.isin, pr?.symbol, pr?.sector, pr?.country].filter(Boolean).map(esc).join(' · ')}${siteLink(pr?.website)}</div>
         ${q ? `<div class="px"><span class="v">${price(q.last)}</span>${dayPct != null ? move(dayPct, dayPct) : ''}<span class="muted" style="font-size:12px">${esc(q.venue || '')}</span></div>` : ''}
       </div>
       <div class="acts">${d.held ? '' : `<button class="btn" id="r-follow" type="button" aria-pressed="${!!d.following}"

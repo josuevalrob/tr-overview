@@ -233,6 +233,7 @@ const TOOLS = [
       const f = r.fit;
       return {
         name: r.name, key: r.key, isin: r.isin, sector: r.profile?.sector ?? null, country: r.profile?.country ?? null,
+        website: r.profile?.website ?? null,
         price_eur: r.quote?.last ?? null, today_pct: r.quote?.prev ? r2((r.quote.last / r.quote.prev - 1) * 100) : null,
         your_position: r.held && { shares: r.held.shares, value: e(r.held.value), gain_eur: e(r.held.gain), gain_pct: r2(r.held.gainPct), weight_pct: r2(r.held.weight) },
         readout: r.points.map(p => ({ group: p.group, topic: p.topic, tone: p.tone, head: p.head, text: p.text, ...(p.rule ? { rule: p.rule } : {}), ...(p.checks ? { checks: p.checks } : {}) })),
