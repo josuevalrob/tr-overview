@@ -9,7 +9,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mergeExports, replay, holdings, taxYear, taxSettings, months, xirr, annualReturns, homeCurrency, currencySplit } from '../lib/portfolio.mjs';
-import { stories, newsNames, otherNames, localNews } from '../lib/news.mjs';
+import { stories, newsNames, otherNames, localNews, venueNames, headlineNames } from '../lib/news.mjs';
 import { readout, themes, naming, peAhead, upDown, score, results } from '../lib/research.mjs';
 import { dropSpikes } from '../lib/market.mjs';
 import * as K from '../lib/kpis.mjs';
@@ -187,6 +187,21 @@ check('news: a company with its name inside another\'s - "Owens Corning" (also "
   assert.equal(localNews({ title: 'Corning has a zest for the Olive Fest', source: 'appeal-democrat.com' }), true);
   assert.equal(localNews({ title: 'Corning Declares Quarterly Dividend, Payable on December 11, 2026', source: 'marketscreener.com' }), false);
   assert.equal(localNews({ title: 'Amazon Thursday Night Football ratings hit a record on Prime Video', source: 'CNBC' }), false);
+});
+
+check('news: a hall named after the company is not the company; onvista\'s "SOFI" is "SoFi" in headlines, tickers keep their case', () => {
+  const intuit = naming(headlineNames('Intuit', ['INTU']), venueNames('Intuit'));
+  assert.equal(intuit('aespa sell out Intuit Dome in Los Angeles down to restricted view seats'), false);
+  assert.equal(intuit("Depeche Mode Tribute Production Set for Berlin's Intuit Arena in December"), false);
+  assert.equal(intuit('Intuit extends NFL partnership and Intuit stock gains 2.34 percent'), true);
+  assert.equal(intuit('Clippers sell Intuit Dome naming rights back to Intuit'), true);
+  const sofi = naming(headlineNames('SOFI Technologies', ['SOFI']));
+  assert.equal(sofi('SoFi Technologies SMB Lending: Can New Loans Unlock Growth?'), true);
+  assert.equal(sofi('SOFI stock jumps'), true);
+  const meta = naming(headlineNames('Meta Platforms (A)', ['META']));
+  assert.equal(meta('A meta-analysis of sleep studies'), false);
+  const lite = naming(headlineNames('Lumentum Holdings', ['LITE']));
+  assert.equal(lite('Pro Lite version launched'), false);
 });
 
 check('prices: a stray close never adjusted for a split is left out, a real jump stays', () => {
