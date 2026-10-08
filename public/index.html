@@ -855,9 +855,12 @@ const CMP = { format: v => {                     // 637,2 bn - German decimals, 
   const a = Math.abs(v), [d, u] = a >= 1e12 ? [1e12, ' tn'] : a >= 1e9 ? [1e9, ' bn'] : a >= 1e6 ? [1e6, ' m'] : a >= 1e3 ? [1e3, ' k'] : [1, ''];
   return `${nf(0, 1).format(v / d)}${u}`;
 } };
-const big = (v, cur = 'EUR') => v == null ? '–' : `${CMP.format(v)} ${cur === 'USD' ? '$' : '€'}`;
-const money = (v, cur = 'EUR') => v == null ? '–' : `${nf(2, 2).format(v)} ${cur === 'USD' ? '$' : '€'}`;
+const unit = c => (!c || c === 'EUR' ? '€' : curSym(c));
+const big = (v, cur = 'EUR') => v == null ? '–' : `${CMP.format(v)} ${unit(cur)}`;
+const money = (v, cur = 'EUR') => v == null ? '–' : `${nf(2, 2).format(v)} ${unit(cur)}`;
 const A = { key: null, data: null, period: 'annual', metric: 'revenue', hist: null, range: store.get('tro.prange', '1Y') };
+// who an estimate row is from: "Yahoo · EPS 2 analysts, revenue 2 analysts"
+const estBy = r => `${r.source ?? 'onvista'}${r.epsAnalysts ? ` · EPS ${r.epsAnalysts} analysts` : ''}${r.revenueAnalysts ? `, revenue ${r.revenueAnalysts} analysts` : ''}`;
 
 function closeAnalysis() { const el = $('#side'); el.classList.remove('on'); setTimeout(() => { el.hidden = true; }, 200); A.key = null; }
 addEventListener('keydown', e => { if (e.key === 'Escape' && A.key) closeAnalysis(); });
@@ -913,11 +916,29 @@ function renderAnalysis() {
   const nextDiv = (us?.dividends || []).find(x => x.exDate >= today);
   const lastDiv = (us?.dividends || []).find(x => x.exDate < today);
   const days = iso => Math.round((Date.parse(iso) - Date.parse(today)) / 864e5);
-  const events = us && (us.earningsDate || lastDiv || nextDiv) ? `<div class="sec"><h3>Events</h3><div class="kv">
-      ${us.earningsDate ? `<span>Next earnings</span><span>${day(us.earningsDate)}${days(us.earningsDate) >= 0 ? ` · in ${days(us.earningsDate)} days` : ''}</span>` : ''}
+  const E = d.estimates, nextDay = us?.earningsDate ?? E?.next?.date ?? null;
+  const events = nextDay || lastDiv || nextDiv ? `<div class="sec"><h3>Events</h3><div class="kv">
+      ${nextDay ? `<span>Next earnings</span><span>${day(nextDay)}${days(nextDay) >= 0 ? ` · in ${days(nextDay)} days` : ''}${!us?.earningsDate && E.next.estimated ? ' <span class="muted">· Yahoo\'s guess</span>' : ''}</span>` : ''}
       ${nextDiv ? `<span>Next ex-dividend</span><span>${day(nextDiv.exDate)} · ${money(nextDiv.amount, 'USD')}</span>` : ''}
       ${lastDiv ? `<span>Last ex-dividend</span><span>${day(lastDiv.exDate)} · ${money(lastDiv.amount, 'USD')}</span>` : ''}
     </div></div>` : '';
+
+  // quarters: what analysts expect for the next ones, and how the last ones came out against their estimate -
+  // Yahoo's, in the company's own currency. Revenue against its estimate only where it was kept before the results
+  const off = (a, e) => (a != null && e ? (a - e) / Math.abs(e) * 100 : null);
+  const vs = (a, e, f) => { const o = off(a, e); return `${f(a)}${o != null ? ` <span class="${dir(o)}">${pct(o)}</span>` : ''}`; };
+  const qs = E ? [...E.quarters.map((q, i) => ({ ...q, ahead: true, due: i === 0 ? nextDay : null })),
+                  ...E.reported.filter(q => q.epsEstimate != null || q.revenueEstimate != null).reverse()] : [];
+  const qtr = e => new Date(`${e}T12:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+  const quarters = qs.length ? `<div class="sec"><h3>Quarters vs analysts</h3>
+      <div class="scroll"><table><thead><tr><th>Quarter to</th><th>Results</th><th>EPS</th><th>Revenue</th></tr></thead><tbody>
+      ${qs.map(q => q.ahead
+        ? `<tr><td>${qtr(q.end)} <span class="muted">est.</span></td><td class="muted">${q.due ? `due ${day(q.due)}` : '–'}</td>
+            <td>${money(q.eps, E.currency)}${q.epsAnalysts ? ` <span class="muted">(${q.epsAnalysts})</span>` : ''}</td><td>${big(q.revenue, E.currency)}${q.revenueAnalysts ? ` <span class="muted">(${q.revenueAnalysts})</span>` : ''}</td></tr>`
+        : `<tr><td>${qtr(q.end)}</td><td>${q.date ? day(q.date) : '–'}</td>
+            <td title="estimate ${money(q.epsEstimate, E.currency)}">${vs(q.eps, q.epsEstimate, v => money(v, E.currency))}</td>
+            <td${q.revenueEstimate != null ? ` title="estimate ${big(q.revenueEstimate, E.currency)}"` : ''}>${vs(q.revenue, q.revenueEstimate, v => big(v, E.currency))}</td></tr>`).join('')}</tbody></table></div>
+      <p class="note">est.: the analysts' average (how many in brackets). Reported: what came out, and by how much it beat (green) or missed (red) the estimate before - revenue only for quarters whose estimate this app saw before the results (kept in data/estimates). Yahoo, ${esc(E.currency ?? '')}.</p></div>` : '';
 
   // financials: annual (onvista, EUR, with estimates), or as reported to the SEC per year / quarter (Nasdaq, USD) -
   // onvista can lag: Sea Limited ends in 2023 there
@@ -926,18 +947,19 @@ function renderAnalysis() {
   const metrics = quarterly ? [['revenue', 'Revenue'], ['ebit', 'EBIT'], ['netIncome', 'Net income']]
                             : [['revenue', 'Revenue'], ['ebitda', 'EBITDA'], ['netIncome', 'Net income']];
   if (!metrics.some(([k]) => k === A.metric)) A.metric = 'revenue';
-  const rowsF = quarterly ? usRows.map(q => ({ label: q.period.slice(0, cut), ...q }))
-                          : d.annual.filter(r => !r.estimate);
+  const rowsF = quarterly ? usRows.map(q => ({ label: q.period.slice(0, cut), ...q })) : d.annual;
   const cur = quarterly ? 'USD' : 'EUR';
   const fin = d.annual.length || us?.quarterly || us?.years ? `<div class="sec"><h3>Financials</h3>
       <div>${us?.quarterly || us?.years ? `<div class="seg" id="a-period"><button data-p="annual" aria-pressed="${!quarterly}">Annual €</button>${us.years ? `<button data-p="years" aria-pressed="${A.period === 'years'}">Reported $</button>` : ''}${us.quarterly ? `<button data-p="quarterly" aria-pressed="${A.period === 'quarterly'}">Quarterly</button>` : ''}</div>` : ''}
       <div class="seg" id="a-metric">${metrics.map(([k, l]) => `<button data-m="${k}" aria-pressed="${A.metric === k}">${l}</button>`).join('')}</div></div>
       <div class="chart" id="a-chart"></div>
       <div class="scroll"><table><thead><tr><th>${A.period === 'quarterly' ? 'Quarter' : 'Year'}</th><th>Revenue</th><th>${quarterly ? 'EBIT' : 'EBITDA'}</th><th>Net income</th>${quarterly ? '' : '<th>EPS</th>'}</tr></thead>
-        <tbody>${(quarterly ? usRows.map(q => ({ ...q, label: q.period.slice(0, cut) })) : d.annual).slice().reverse().map(r => `<tr>
-          <td>${esc(r.label)}${r.estimate ? ' <span class="muted">est.</span>' : ''}</td><td>${big(r.revenue, cur)}</td><td>${big(quarterly ? r.ebit : r.ebitda, cur)}</td>
-          <td class="${dir(r.netIncome)}">${big(r.netIncome, cur)}</td>${quarterly ? '' : `<td>${r.eps == null ? '–' : nf(2, 2).format(r.eps)}</td>`}</tr>`).join('')}</tbody></table></div>
-      <p class="note">${quarterly ? `${A.period === 'years' ? 'Fiscal years' : 'Last quarters'} as reported, USD (Nasdaq).` : 'EUR (onvista). Revenue = EBITDA ÷ EBITDA margin; net income = revenue × net margin. Estimates (est.) only cover EPS and dividends.'}</p></div>` : '';
+        <tbody>${(quarterly ? usRows.map(q => ({ ...q, label: q.period.slice(0, cut) })) : d.annual.filter(r => [r.revenue, r.ebitda, r.netIncome, r.eps].some(v => v != null)))
+          .slice().reverse().map(r => `<tr>
+          <td>${esc(r.label)}${r.estimate ? ` <span class="muted" title="${esc(estBy(r))}">est.</span>` : ''}</td><td>${big(r.revenue, cur)}${r.revenueAnalysts ? ` <span class="muted">(${r.revenueAnalysts})</span>` : ''}</td><td>${big(quarterly ? r.ebit : r.ebitda, cur)}</td>
+          <td class="${dir(r.netIncome)}">${big(r.netIncome, cur)}</td>${quarterly ? '' : `<td>${r.eps == null ? '–' : nf(2, 2).format(r.eps)}${r.epsAnalysts ? ` <span class="muted">(${r.epsAnalysts})</span>` : ''}</td>`}</tr>`).join('')}</tbody></table></div>
+      <p class="note">${quarterly ? `${A.period === 'years' ? 'Fiscal years' : 'Last quarters'} as reported, USD (Nasdaq).`
+        : `EUR (onvista). Revenue = EBITDA ÷ EBITDA margin; net income = revenue × net margin. A year counts as reported once filed. est.: the analysts' average${d.estimates?.rate ? ` - revenue and EPS from Yahoo (how many analysts in brackets), in euros at the ECB rate${d.estimates.currency !== 'EUR' ? ` (theirs in ${esc(d.estimates.currency)})` : ''}; dividends from onvista` : ' - EPS and dividends, from onvista'}. Hollow bars: estimates.`}</p></div>` : '';
 
   const divYears = d.annual.filter(r => r.dps);
   const dividends = divYears.length || us?.dividends?.length ? `<div class="sec"><h3>Dividends</h3>
@@ -979,9 +1001,9 @@ function renderAnalysis() {
       ${pr?.marketCap ? `<span>Market value</span><span>${big(pr.marketCap, pr.marketCapCurrency)}</span>` : ''}
       ${pos ? `<span>You hold</span><span>${shares(pos.shares)} · ${eur(pos.value)}</span><span>Your gain</span><span class="${dir(pos.gain)}">${signed(pos.gain)} (${pct(pos.gainPct)})</span>` : ''}
     </div>
-    ${analysts}${events}${fin}${dividends}${facts}${listings}
+    ${analysts}${events}${quarters}${fin}${dividends}${facts}${listings}
     ${d.notes.length ? `<p class="note">${d.notes.map(esc).join(' ')}</p>` : ''}
-    <p class="note">Sources: onvista${us ? `, Nasdaq${us.listedAs ? ` (US listing ${esc(us.listedAs)})` : ''}` : ''}. Not investment advice.</p>`;
+    <p class="note">Sources: onvista${us ? `, Nasdaq${us.listedAs ? ` (US listing ${esc(us.listedAs)})` : ''}` : ''}${d.estimates ? `, Yahoo (${esc(d.estimates.symbol)})` : ''}. Not investment advice.</p>`;
   el.querySelector('.x').onclick = closeAnalysis;
   el.querySelectorAll('#a-period button').forEach(b => b.onclick = () => { A.period = b.dataset.p; renderAnalysis(); });
   el.querySelectorAll('#p-range button').forEach(b => b.onclick = () => { A.range = b.dataset.r; store.set('tro.prange', A.range); renderAnalysis(); });
@@ -1002,12 +1024,12 @@ function renderAnalysis() {
   const host = $('#a-chart');
   if (host) {
     const pts = rowsF.filter(r => r[A.metric] != null);
-    if (pts.length) finChart(host, pts.map(r => r.label), pts.map(r => r[A.metric]), cur, metrics.find(([k]) => k === A.metric)[1]);
+    if (pts.length) finChart(host, pts.map(r => r.label), pts.map(r => r[A.metric]), cur, metrics.find(([k]) => k === A.metric)[1], pts.map(r => r.estimate ? estBy(r) : null));
   }
 }
 
-/** Columns for one financial metric. Negative years grow down in the diverging red. */
-function finChart(host, labels, values, cur, name) {
+/** Columns for one financial metric. Negative years grow down in the diverging red; an estimate (est[i]: who from) hollow. */
+function finChart(host, labels, values, cur, name, est = []) {
   const W = Math.max(300, host.clientWidth), H = 170, m = { l: 48, r: 8, t: 10, b: 24 };
   const hi = Math.max(0, ...values), lo = Math.min(0, ...values);
   const step = niceStep((hi - lo || 1) / 4);
@@ -1024,14 +1046,17 @@ function finChart(host, labels, values, cur, name) {
     const x0 = m.l + i * band + (band - bw) / 2, y0 = y(0), y1 = y(v), h = Math.abs(y1 - y0);
     if (h >= 0.5) {
       const r = Math.min(4, h, bw / 2), sg = y1 < y0 ? 1 : -1;
-      g += `<path d="M${x0},${y0}V${y1 + sg * r}Q${x0},${y1} ${x0 + r},${y1}H${x0 + bw - r}Q${x0 + bw},${y1} ${x0 + bw},${y1 + sg * r}V${y0}Z" fill="var(${v >= 0 ? '--pos' : '--neg'})"/>`;
+      const c = `var(${v >= 0 ? '--pos' : '--neg'})`;
+      g += `<path d="M${x0},${y0}V${y1 + sg * r}Q${x0},${y1} ${x0 + r},${y1}H${x0 + bw - r}Q${x0 + bw},${y1} ${x0 + bw},${y1 + sg * r}V${y0}Z" `
+        + (est[i] ? `fill="none" stroke="${c}" stroke-width="1.5" stroke-dasharray="3 2"/>` : `fill="${c}"/>`);
     }
-    if (showLabel(i, n, every)) g += `<text x="${x0 + bw / 2}" y="${H - 6}" text-anchor="middle">${esc(labels[i])}</text>`;
+    if (showLabel(i, n, every)) g += `<text x="${x0 + bw / 2}" y="${H - 6}" text-anchor="middle">${esc(labels[i])}${est[i] ? 'e' : ''}</text>`;
     g += `<rect data-i="${i}" x="${m.l + i * band}" y="${m.t}" width="${band}" height="${H - m.t - m.b}" fill="transparent"/>`;
   });
   host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(name)} by period">${g}</svg>`;
   host.querySelectorAll('rect[data-i]').forEach(r => {
-    r.onpointermove = ev => showTip(ev, `<div class="t">${esc(labels[r.dataset.i])}</div>` + tipRow(name, big(values[r.dataset.i], cur)));
+    r.onpointermove = ev => showTip(ev, `<div class="t">${esc(labels[r.dataset.i])}${est[r.dataset.i] ? ' est.' : ''}</div>` + tipRow(name, big(values[r.dataset.i], cur))
+      + (est[r.dataset.i] ? `<div class="muted" style="font-size:11.5px">${esc(est[r.dataset.i])}</div>` : ''));
     r.onpointerleave = hideTip;
   });
 }
@@ -1779,10 +1804,10 @@ function renderResearch() {
     <p class="note">${d.isin?.startsWith('US') ? `Net income per year from onvista${d.pe.nasdaq?.length ? ` (${esc(d.pe.nasdaq.join(', '))} from Nasdaq, in euros at today's rate)` : ''} ÷ today's share count` : 'Earnings per share per year from onvista'}, blended between year ends (about the last twelve months); after ${esc(d.pe.basis)} it stays at ${esc(d.pe.basis)}. No line in or just after a loss year, or above 100×.${d.pe.ahead ? ` Dashed: today's price ÷ analysts' earnings per share for ${esc(d.pe.ahead.knots.map(k => k.year).join(' and '))}, blended the same way${d.stats?.estimatesOtherBasis ? ` - far from the profit reported: a big jump, or another measure of profit (adjusted), so part of the drop can be the measure` : ''}.` : ''}</p></div>` : '';
   const U = d.upDown, p0 = v => `${v > 0 ? '+' : v < 0 ? '−' : ''}${N0.format(Math.abs(v))} %`;
   const ud = U ? `<div class="card"><h2>Up / down from here</h2>
-    <p class="sub">${U.up != null ? `Up <b>${p0(U.up)}</b> to the analysts' average target (${price(U.target)})` : 'No analysts\' target (only for shares listed in the US)'}${U.down != null ? ` · down <b>${p0(U.down)}</b> to the ${esc(U.downTo)} (${price(U.level)})` : ''}${U.ratio != null ? ` · <b>${nf(0, 1).format(U.ratio)} €</b> up for each 1 € down` : ''}.</p>
+    <p class="sub">${U.up != null ? `Up <b>${p0(U.up)}</b> to the analysts' average target (${price(U.target)}${U.analysts != null ? `, ${U.analysts} analyst${U.analysts === 1 ? '' : 's'}` : ''})` : 'No analysts\' target found'}${U.down != null ? ` · down <b>${p0(U.down)}</b> to the ${esc(U.downTo)} (${price(U.level)})` : ''}${U.ratio != null ? ` · <b>${nf(0, 1).format(U.ratio)} €</b> up for each 1 € down` : ''}.</p>
     <div class="keys"><span><i style="background:var(--s1)"></i>Price</span><span><i style="background:var(--s2)"></i>200-day average</span>${U.target ? '<span><i style="background:var(--c3)"></i>Analysts\' average target</span>' : ''}</div>
     <div class="chart" id="r-ud"></div>
-    <p class="note">The last year of closes${q?.venue ? `, ${esc(q.venue)}` : ''}. Up: the analysts' average target${U.target ? ` (their range ${price(U.low)} – ${price(U.high)})` : ''}, their dollars at the stock's own euro/dollar ratio. Down: the 200-day average - where the trend would break - or the 52-week low when the price is already under it. Green from 2 € up for each 1 € down, red under 1 €. Not a forecast.</p></div>` : '';
+    <p class="note">The last year of closes${q?.venue ? `, ${esc(q.venue)}` : ''}. Up: the analysts' average target${U.target ? ` (their range ${price(U.low)} – ${price(U.high)})` : ''} - Nasdaq's for US-listed shares, else Yahoo's - in euros at today's price. Down: the 200-day average - where the trend would break - or the 52-week low when the price is already under it. Green from 2 € up for each 1 € down, red under 1 €; fewer than 3 analysts: not coloured. Not a forecast.</p></div>` : '';
 
   $('#r-body').innerHTML = head + ud + sectors + gains + pe + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div>' : '')
     + `<div class="pair">${fit}${news}</div>`;
@@ -1836,7 +1861,7 @@ function renderUd() {
       { name: 'Price', color: '--s1', values: U.close },
       { name: '200-day average', color: '--s2', values: U.ma200 },
       ...(U.target ? [{ name: "Analysts' target", color: '--c3', dash: true, values: U.dates.map(() => U.target) }] : [])],
-    fmtTick: v => `${N0.format(v)} €`, fmtVal: v => (v == null ? '–' : price(v)) });
+    fmtTick: v => `${nf(0, 2).format(v)} €`, fmtVal: v => (v == null ? '–' : price(v)) });   // 2,5 €, not a second 3 €
 }
 
 /** The score: a big number for all, a bar per group - the share of judged points that speak for it. */

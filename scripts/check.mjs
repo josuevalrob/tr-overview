@@ -10,10 +10,11 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mergeExports, replay, holdings, taxYear, taxSettings, months, xirr, annualReturns, homeCurrency, currencySplit } from '../lib/portfolio.mjs';
 import { stories, newsNames, otherNames } from '../lib/news.mjs';
-import { readout, themes, naming, peAhead, upDown, score } from '../lib/research.mjs';
+import { readout, themes, naming, peAhead, upDown, score, results } from '../lib/research.mjs';
 import { dropSpikes } from '../lib/market.mjs';
 import * as K from '../lib/kpis.mjs';
-import { sectorOf } from '../lib/analysis.mjs';
+import { sectorOf, markFiled, mergeEstimates, fyLabel } from '../lib/analysis.mjs';
+import { parseEstimates } from '../lib/yahoo.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const text = fs.readFileSync(path.join(HERE, '..', 'public', 'sample.csv'), 'utf8');
@@ -290,10 +291,20 @@ check('research: home listings - estimates on another profit, next 12 months, di
                         { label: '2026', estimate: true, eps: 3, dps: 0.5 }, { label: '2027', estimate: true, eps: 3.6 }],
                reported: [{ label: '2022', equity: 400, minorities: 0, liabilities: 600, totalAssets: 1000 },
                           { label: '2025', end: '2025-12-31', currency: 'EUR', standard: 'IFRS', netIncome: 100, equity: 500, minorities: 0,
-                            totalAssets: 1200, liabilities: 700, currentAssets: 300, currentLiabilities: 200, pretax: 120, interestPaid: 20, cash: 50 }] };
+                            totalAssets: 1200, liabilities: 700, currentAssets: 300, currentLiabilities: 200, pretax: 120, interestPaid: 20, cash: 50 }],
+               // Yahoo, in pence: 2.600 p against 2.000 p is +30 %, whatever the euro price
+               targets: { currency: 'GBp', price: 2000, target: 2600, low: 2200, high: 3000, analysts: 5, recommendation: 'buy', evEbitda: 9.5 } };
   const r = readout({ an, closes: [], quote: { last: 30 }, today: '2026-10-07', rates: { date: '2026-10-06', bond10y: 3.5, fx: {} } });
   const pt = Object.fromEntries(r.points.map(p => [p.topic, p]));
   assert.equal(r.stats.pe, 30);                                       // on the reported 1 €
+  assert.equal(pt.Analysts.head, '5 analysts · target +30 %');        // no Nasdaq: Yahoo's
+  assert.match(pt.Analysts.text, /Average target 39,00 € \(\+30 %\), range 33,00–45,00 € - Yahoo, in euros at today's price \(theirs in GBp\)/);
+  assert.equal(pt.Analysts.tone, 'good');
+  assert.match(pt.Valuation.text, /EV\/EBITDA 9,5 \(Yahoo\)/);
+  // a euro target counts as it is: 39 € against today's 30 €, not rescaled by Yahoo's own (other) price
+  const eu = readout({ an: { ...an, targets: { currency: 'EUR', price: 32, target: 39, low: 33, high: 45, analysts: 5, recommendation: 'buy' } },
+                       closes: [], quote: { last: 30 }, today: '2026-10-07', rates: { date: '2026-10-06', bond10y: 3.5, fx: {} } });
+  assert.equal(eu.points.find(p => p.topic === 'Analysts').head, '5 analysts · target +30 %');
   assert.equal(Math.round(r.stats.ntmPe * 100), 867);                 // 23 % of 2026 left: 0,23 × 3 + 0,77 × 3,6
   assert.equal(r.stats.peg, undefined);                               // onvista's PEG mixes the two profits
   assert.match(pt.Valuation.text, /3× the reported 1,00 €/);
@@ -364,12 +375,13 @@ check('research: the P/E line goes on into the estimates, if the price stays', (
 check('research: up to the analysts\' target, down to the 200-day average or the 52-week low; the score', () => {
   // 300 closes rising 1 € a day from 1 €: the 200-day average on the last day is (101 + ... + 300) ÷ 200 = 200,5
   const closes = Array.from({ length: 300 }, (_, i) => [new Date(Date.UTC(2025, 9, 8) + i * 864e5).toISOString().slice(0, 10), i + 1]);
-  const at = { target: 150, low: 110, high: 300, price: 100 };                    // dollars: +50 %
+  const at = { target: 150, low: 110, high: 300, price: 100, n: 10 };             // dollars: +50 %
   const u = upDown(closes, 300, { ma200: 200.5, low52: 1 }, at, '2026-08-03');
   assert.equal(Math.round(u.up), 50);
   assert.equal(u.target, 450);                                                     // 300 € × 150 $ ÷ 100 $
   assert.deepEqual([u.downTo, u.level, +u.down.toFixed(2)], ['200-day average', 200.5, -33.17]);
   assert.equal(+u.ratio.toFixed(2), 1.51);
+  assert.equal(u.analysts, 10);
   assert.equal(u.ma200.at(-1), 200.5);                                             // the running average ends where the stat does
   assert.equal(u.ma200[u.dates.indexOf(closes[198][0])], null);                    // under 200 closes: none
   // under its 200-day average: down to the 52-week low; no analysts: no up, no ratio
@@ -437,6 +449,71 @@ check('sector: by onvista\'s industry - an online shop is Consumer, not Technolo
   assert.equal(sectorOf(co('Sonstige Branchen', 'Diverse')), 'Diversified');
   assert.equal(sectorOf(co('Neu', 'Chemie / Pharma / Gesundheit')), 'Health care');
   assert.equal(sectorOf({}), null);
+});
+
+check('estimates: Yahoo\'s periods, moved on when its dates lag results already out; revenue held against what came out', () => {
+  const v = x => ({ raw: x }), at = d => ({ raw: Date.parse(`${d}T00:00:00Z`) / 1000 });
+  const t = (period, endDate, eps, rev, ago) => ({ period, endDate,
+    earningsEstimate: { avg: v(eps), numberOfAnalysts: v(30), earningsCurrency: 'USD' },
+    revenueEstimate: { avg: v(rev), numberOfAnalysts: v(rev ? 33 : 0), yearAgoRevenue: v(ago), revenueCurrency: 'USD' } });
+  // Micron after its results of 30 Sep 2026: "this year" still ends Aug 2026, the year just reported
+  const q = { earnings: { financialCurrency: 'USD', earningsChart: { quarterly: [
+                { periodEndDate: at('2026-05-31'), reportedDate: at('2026-06-25'), actual: v(19), estimate: v(18) },
+                { periodEndDate: at('2026-08-31'), reportedDate: at('2026-09-30'), actual: v(33.4), estimate: v(31.8) }] } },
+              earningsTrend: { trend: [t('0q', '2026-08-31', 38, 61e9, 13e9), t('+1q', '2026-11-30', 42, 0, 0),
+                                       t('0y', '2026-08-31', 176, 275e9, 133e9), t('+1y', '2027-08-31', 206, 319e9, 275e9)] },
+              calendarEvents: { earnings: { earningsDate: [at('2026-12-23')], isEarningsDateEstimate: true } } };
+  const e = parseEstimates(q, [{ end: '2026-05-28', revenue: 40e9 }]);
+  assert.deepEqual(e.years.map(y => y.end), ['2027-08-31', '2028-08-31']);
+  assert.deepEqual(e.quarters.map(y => y.end), ['2026-11-30', '2027-02-28']);
+  assert.equal(Math.round(e.years[0].revenueGrowth), 107);                        // 275 bn on 133 bn
+  assert.equal(e.quarters[1].revenue, null);                                      // Yahoo's 0: no estimate
+  assert.equal(e.reported[0].revenue, 40e9);                                      // 28 May for 31 May: the same quarter
+  assert.deepEqual(e.next, { date: '2026-12-23', estimated: true });
+  assert.deepEqual([fyLabel('2027-08-31'), fyLabel('2026-12-31'), fyLabel('2010-03-31')], ['26/27', '2026', '09/10']);
+});
+
+check('estimates: a year is reported once filed, not once ended; Yahoo\'s years replace onvista\'s, one source a figure', () => {
+  const rows = () => [{ label: '2025', eps: 0.6 }, { label: '2026', eps: 1.3, dps: 0.1 }, { label: '2027', eps: 1.5 },
+                      { label: '2028', estimate: true, eps: 2, dps: 0.2, peg: 0.9 }];
+  // On Holding: onvista lists 2026-2028 without an "e"
+  assert.deepEqual(markFiled(rows(), { filed: ['2025'] }, '2027-02-10').map(r => !!r.estimate), [false, true, true, true]);
+  assert.equal(markFiled(rows(), { through: '2026-12-31' }, '2027-03-05')[1].estimate, undefined);   // Q4 out
+  assert.equal(markFiled(rows(), {}, '2027-05-15')[1].estimate, undefined);       // four months on
+  const est = { rate: 2, years: [{ label: '2026', end: '2026-12-31', eps: 3, epsAnalysts: 20, revenue: 8e9, revenueAnalysts: 25 },
+                                  { label: '2029', end: '2029-12-31', eps: 6, epsAnalysts: 4, revenue: null }] };
+  const m = mergeEstimates(markFiled(rows(), { filed: ['2025'] }, '2026-10-08'), est);
+  const by = Object.fromEntries(m.map(r => [r.label, r]));
+  assert.deepEqual([by['2026'].eps, by['2026'].revenue, by['2026'].source, by['2026'].epsAnalysts, by['2026'].dps], [1.5, 4e9, 'Yahoo', 20, 0.1]);
+  assert.deepEqual([by['2028'].eps, by['2028'].peg, by['2028'].dps], [null, null, 0.2]);            // not onvista's EPS for one year
+  assert.equal(by['2029'].eps, 3);                                                // a year only Yahoo has: a row
+  assert.deepEqual(m.map(r => r.label), ['2025', '2026', '2027', '2028', '2029']);
+  assert.equal(mergeEstimates(rows(), { ...est, rate: null })[1].eps, 1.3);       // no exchange rate: onvista's stay
+});
+
+check('estimates: the read-out names the source and the analysts, judges results against the estimate, says what is due', () => {
+  const an = { key: 'DE0000000002', name: 'Y', type: 'STOCK', isin: 'DE0000000002', notes: [],
+               profile: { marketCap: 1000, marketCapCurrency: 'EUR', shares: 100 },
+               annual: [{ label: '2024', eps: 0.8 }, { label: '2025', eps: 1 },
+                        { label: '2026', estimate: true, eps: 1.2, end: '2026-12-31', source: 'Yahoo', epsAnalysts: 2 },
+                        { label: '2027', estimate: true, eps: 1.5, end: '2027-12-31', source: 'Yahoo', epsAnalysts: 2 }],
+               estimates: { source: 'Yahoo', currency: 'EUR', rate: 1,
+                 years: [{ label: '2026', end: '2026-12-31', revenue: 350e6, revenueGrowth: 22.7, revenueAnalysts: 2 }],
+                 quarters: [{ end: '2026-09-30', eps: 0.3, epsAnalysts: 2, revenue: 90e6, revenueAnalysts: 2, revenueGrowth: 10 }],
+                 reported: [{ end: '2025-12-31', eps: 0.2, epsEstimate: 0.25 }, { end: '2026-03-31', eps: 0.3, epsEstimate: 0.25 },
+                            { end: '2026-06-30', eps: 0.2, epsEstimate: 0.3, revenue: 95e6, revenueEstimate: 100e6 }],
+                 next: { date: '2026-11-12', estimated: false } } };
+  const r = readout({ an, closes: [], quote: { last: 12 }, today: '2026-10-08', rates: { date: '2026-10-07', bond10y: 3.5, fx: {} } });
+  const pt = Object.fromEntries(r.points.map(p => [p.topic, p]));
+  assert.match(pt.Outlook.text, /1,20 € \(2026\), 1,50 € \(2027\) - Yahoo, 2 analysts/);
+  assert.match(pt.Outlook.text, /Revenue expected: 350 m € \(2026, \+23 %\) - Yahoo, 2 analysts/);
+  assert.equal(pt.Outlook.tone, 'neutral');                                       // 2 analysts: not judged
+  assert.match(pt.Valuation.text, /on the next 12 months \(Yahoo, 2 analysts\)/);
+  assert.equal(pt.Results.tone, 'bad');                                           // missed 2 of 3
+  assert.match(pt.Results.text, /Jun 2026 95 m € vs 100 m \(−5 %\)/);
+  assert.match(pt['Next results'].text, /^12 Nov 2026, in 35 days\. Analysts expect EPS 0,30 € and revenue 90 m € \(\+10 % on a year before\) for the quarter to 30 Sept 2026/);
+  const q = results(an.estimates);
+  assert.deepEqual([q.beats, q.misses, q.judged, Math.round(q.list[2].revenueSurprise)], [1, 2, 3, -5]);
 });
 
 check('the MCP server and the web server parse', () => {
