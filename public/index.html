@@ -313,6 +313,26 @@
   .score .track{height:8px;border-radius:4px;background:var(--grid);overflow:hidden}
   .score .track i{display:block;height:100%;border-radius:4px;background:var(--s1)}
   .score .bar b{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink)}
+  /* beside the bars, 70 / 30: bear, base and bull a year out, one row per lens, on one % axis from today */
+  .score .bars{flex:7 1 0}
+  .scen{flex:3 1 0;min-width:240px;display:grid;gap:7px;padding-left:20px;border-left:1px solid var(--line);font-size:12px;color:var(--ink2)}
+  .scen .sh{display:flex;justify-content:space-between;color:var(--muted);font-size:11.5px}
+  .scen .sr{display:grid;gap:3px;cursor:default}
+  .scen .sl{display:flex;justify-content:space-between;gap:8px}
+  .scen .sl small{font-variant-numeric:tabular-nums;color:var(--ink);font-size:11.5px;white-space:nowrap}
+  .scen .st{position:relative;height:10px}
+  .scen .st i{position:absolute;top:0;bottom:0}
+  .scen .st .z{width:0;border-left:1px dashed var(--axis);top:-3px;bottom:-3px}
+  .scen .st .rg{top:3px;bottom:3px;border-radius:2px;background:color-mix(in srgb,var(--s1) 40%,transparent)}
+  .scen .st .dt{width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--s1);border:2px solid var(--surface)}
+  .scen .st .rg.cr{border-radius:2px 0 0 2px;-webkit-mask:linear-gradient(90deg,#000 85%,transparent);mask:linear-gradient(90deg,#000 85%,transparent)}
+  .scen .st .rg.cl{border-radius:0 2px 2px 0;-webkit-mask:linear-gradient(270deg,#000 85%,transparent);mask:linear-gradient(270deg,#000 85%,transparent)}
+  .scen .st .rg.cl.cr{-webkit-mask:linear-gradient(90deg,transparent,#000 15%,#000 85%,transparent);mask:linear-gradient(90deg,transparent,#000 15%,#000 85%,transparent)}
+  .scen .sa{position:relative;height:14px;color:var(--muted);font-size:10.5px;font-variant-numeric:tabular-nums}
+  .scen .sa span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+  .scen .sa span:first-child{transform:none} .scen .sa span:last-child{transform:translateX(-100%)}
+  .scen .sq{color:var(--c4);font-size:11.5px}
+  @media (max-width:900px){ .score{flex-wrap:wrap} .scen{flex-basis:100%;padding:12px 0 0;border-left:0;border-top:1px solid var(--line)} }
   .ro-row{border-top:1px solid var(--line);font-size:13.5px}
   .ro-row>summary,.ro-row>.s{display:grid;grid-template-columns:10px 118px 1fr 14px;gap:10px;align-items:center;padding:8px 0;list-style:none}
   .ro-row>summary{cursor:pointer}
@@ -1847,7 +1867,7 @@ function renderResearch() {
           title="On the watchlist it also shows in News">${d.following ? 'Following ✓' : 'Follow'}</button>`}
         <button class="btn" id="r-more" type="button">Charts &amp; financials →</button></div></div>
     ${d.held ? `<p class="note" style="margin-top:6px">You hold ${shares(d.held.shares)} · ${eur(d.held.value)} · <span class="${dir(d.held.gain)}">${signed(d.held.gain)} (${pct(d.held.gainPct)})</span> · ${N0.format(d.held.weight)} % of the depot</p>` : ''}
-    ${d.score?.score != null ? scoreBlock(d.score) : ''}
+    ${d.score?.score != null ? scoreBlock(d.score, d.scenarios) : ''}
     <div class="row" style="margin:16px 0 0"><h3 style="margin:0;font-size:13px">Read-out</h3>
       <div class="keys" style="margin:0"><span><i style="background:var(--good)"></i>speaks for it</span><span><i style="background:var(--critical)"></i>speaks against it</span><span><i style="background:var(--axis)"></i>a fact</span>
         <button class="btn" id="r-open" type="button" style="padding:2px 10px;font-size:12px">${R.open ? 'Hide details' : 'Show all details'}</button></div></div>
@@ -1974,7 +1994,7 @@ function renderResearch() {
     document.querySelectorAll('#r-body details.ro-row').forEach(x => { x.open = R.open; });
     $('#r-open').textContent = R.open ? 'Hide details' : 'Show all details';
   };
-  renderPe(); renderUd();
+  renderPe(); renderUd(); wireScen();
   R.kedit = false; renderKpis();
   const sl = $('#r-slide');
   if (sl) {
@@ -2000,12 +2020,46 @@ function renderUd() {
 }
 
 /** The score: a big number for all, a bar per group - the share of judged points that speak for it. */
-function scoreBlock(s) {
+function scoreBlock(s, sc) {
   const why = 'The share of judged points below that speak for it: green ÷ (green + red). Grey facts and "In your depot" do not count. Not a forecast.';
   return `<div class="score"><div class="all"><b>${s.score}</b><span class="of">/100</span>
       <div class="n">${s.good} for · ${s.bad} against<span class="q" title="${esc(why)}">?</span></div></div>
     <div class="bars">${s.groups.map(g => `<div class="bar" title="${g.good} for · ${g.bad} against"><span>${esc(g.label)}</span>
-      <div class="track"><i style="width:${g.score}%"></i></div><b>${g.score}</b></div>`).join('')}</div></div>`;
+      <div class="track"><i style="width:${g.score}%"></i></div><b>${g.score}</b></div>`).join('')}</div>${sc ? scenBlock(sc) : ''}</div>`;
+}
+/**
+ * Bear, base and bull a year from today (lib/research.mjs scenarios): a row per lens - the bar from bear to bull,
+ * the dot at base - all on one % axis, the dashed line at today's price. Hover a row for the prices and the source.
+ */
+function scenBlock(sc) {
+  // one lens far out (Adobe's own P/E range: +261 %) would squeeze the others into a corner: the axis stops at
+  // −90 / +150 %, a bar past it runs to the edge with an arrow, the numbers above it stay the real ones
+  const CAP = [-90, 150], L = sc.lenses, all = L.flatMap(l => [l.bear, l.bull]).map(v => Math.min(CAP[1], Math.max(CAP[0], v)));
+  const step = niceStep((Math.max(0, ...all) - Math.min(0, ...all)) / 4 || 10);
+  const lo = Math.floor(Math.min(0, ...all) / step) * step, hi = Math.ceil(Math.max(0, ...all) / step) * step;
+  const x = v => ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo || 1) * 100).toFixed(2);
+  const cut = l => `${l.bear < lo ? ' cl' : ''}${l.bull > hi ? ' cr' : ''}`;
+  const s0 = v => `${v > 0 ? '+' : v < 0 ? '−' : ''}${N0.format(Math.abs(v))}`;
+  const why = 'A year from today\'s price, three ways - none a forecast. Bar: bear to bull, dot: base. Analysts: their lowest, average and highest target. '
+    + 'Own P/E range: its P/E over the last 3 years on today\'s reported EPS, grown as analysts expect. Past 1 year: bought on any day and held a year - 10 % of outcomes worse than bear, 10 % better than bull.';
+  return `<div class="scen" id="r-scen"><div class="sh"><span>1 year from ${price(sc.last)}</span><span class="q" title="${esc(why)}">?</span></div>
+    ${L.map((l, i) => `<div class="sr" data-i="${i}"><div class="sl"><span>${esc(l.label)}</span><small>${s0(l.bear)} · ${s0(l.base)} · ${s0(l.bull)} %</small></div>
+      <div class="st"><i class="z" style="left:${x(0)}%"></i><i class="rg${cut(l)}" style="left:${x(l.bear)}%;width:${(x(l.bull) - x(l.bear)).toFixed(2)}%"></i>
+        <i class="dt" style="left:${x(l.base)}%"></i></div></div>`).join('')}
+    <div class="sa">${[lo, ...(lo < 0 && hi > 0 ? [0] : []), hi].map(t => `<span style="left:${x(t)}%">${t ? `${s0(t)} %` : '0'}</span>`).join('')}</div>
+    ${sc.squeeze ? `<div class="sq">Squeeze possible: ${sc.squeeze.pct != null ? `${nf(0, 1).format(sc.squeeze.pct)} % sold short` : ''}${sc.squeeze.days != null ? ` · ${nf(0, 1).format(sc.squeeze.days)} days to cover` : ''}</div>` : ''}</div>`;
+}
+/** The scenario rows' tooltips: the three prices in euros and where they come from. */
+function wireScen() {
+  const sc = R.data?.scenarios, host = $('#r-scen');
+  if (!sc || !host) return;
+  host.querySelectorAll('.sr').forEach(el => {
+    const l = sc.lenses[el.dataset.i];
+    el.onpointermove = ev => showTip(ev, `<div class="t">${esc(l.label)}</div>`
+      + [['Bear', 0, l.bear], ['Base', 1, l.base], ['Bull', 2, l.bull]].map(([k, j, v]) => tipRow(k, `${price(l.prices[j])} (${signed0(v)})`)).join('')
+      + `<div class="r" style="max-width:280px;white-space:normal;color:var(--muted)">${esc(l.note)}</div>`);
+    el.onpointerleave = hideTip;
+  });
 }
 
 function renderPe() {

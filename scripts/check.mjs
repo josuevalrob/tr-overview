@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mergeExports, replay, holdings, taxYear, taxSettings, months, xirr, annualReturns, homeCurrency, currencySplit } from '../lib/portfolio.mjs';
 import { stories, newsNames, otherNames, localNews, venueNames, headlineNames } from '../lib/news.mjs';
-import { readout, themes, naming, peAhead, upDown, score, results } from '../lib/research.mjs';
+import { readout, themes, naming, peAhead, upDown, score, results, scenarios } from '../lib/research.mjs';
 import { dropSpikes } from '../lib/market.mjs';
 import * as K from '../lib/kpis.mjs';
 import { sectorOf, mainListing, markFiled, mergeEstimates, fyLabel } from '../lib/analysis.mjs';
@@ -649,6 +649,26 @@ check('research: the stage - revenue growing, a profit, money paid back - and th
   const down = { ...pay, annual: [pay.annual[0], { ...pay.annual[1], revenue: 800 }, pay.annual[2]],
                  estimates: { currency: 'EUR', years: [{ label: '2026', end: '2026-12-31', revenue: 760, revenueGrowth: -5 }] } };
   assert.match(st(at(down, 10)).head, /^5 Decline · fwd P\/E 7 · /);
+});
+
+check('research: scenarios - bear / base / bull a year out, three lenses, squeeze only as a flag', () => {
+  // 2 years of closes: 100 € rising 50 % in a straight line, so every year held gained
+  const day0 = Date.parse('2024-10-08'), closes = Array.from({ length: 731 }, (_, i) =>
+    [new Date(day0 + i * 864e5).toISOString().slice(0, 10), 100 + 50 * i / 730]);
+  const pe = { dates: closes.map(c => c[0]), values: closes.map((c, i) => 10 + 10 * i / 730), now: 20 };   // P/E 10 -> 20
+  const ev = { ahead: [{ end: '2026-12-31', eps: 8 }, { end: '2027-12-31', eps: 8.8 }] };                 // +10 % a year
+  const ud = { target: 180, low: 120, high: 240, analysts: 12 };
+  const s = scenarios({ closes, last: 150, ud, pe, ev, today: '2026-10-08', shortPct: 20, daysToCover: 2 });
+  const by = Object.fromEntries(s.lenses.map(l => [l.id, l]));
+  assert.deepEqual([by.analysts.bear, by.analysts.base, by.analysts.bull].map(Math.round), [-20, 20, 60]);
+  // P/E 11 / 15 / 19 (10 % / middle / 90 % of days) on 7,5 € x 1,10
+  assert.deepEqual(by.pe.pe.map(Math.round), [11, 15, 19]);
+  assert.equal(Math.round(by.pe.base), -17);                             // 15 x 8,25 = 123,75 against 150
+  assert.equal(by.past.up, 100);
+  assert.ok(by.past.bear > 0 && by.past.bull < 50);
+  assert.deepEqual(s.squeeze, { pct: 20, days: 2 });                     // 15 % or more sold short
+  assert.equal(scenarios({ closes, last: 150, today: '2026-10-08', shortPct: 3, daysToCover: 1 }).squeeze, null);
+  assert.equal(scenarios({ closes: [], last: 150, today: '2026-10-08' }), null);   // no lens, no chart
 });
 
 check('the MCP server and the web server parse', () => {
