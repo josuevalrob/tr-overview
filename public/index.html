@@ -1859,7 +1859,7 @@ function renderResearch() {
     <div class="rhead"><div>
         <h2 style="font-size:18px">${esc(d.name)}</h2>
         <div class="id muted" style="font-size:12px">${[d.isin, pr?.symbol, pr?.sector, pr?.country].filter(Boolean).map(esc).join(' · ')}${siteLink(pr?.website)}</div>
-        ${q ? `<div class="px"><span class="v">${price(q.last)}</span>${dayPct != null ? move(dayPct, dayPct) : ''}<span class="muted" style="font-size:12px">${esc(q.venue || '')}</span></div>` : ''}
+        ${q ? `<div class="px"><span class="v">${price(q.last)}</span>${dayPct != null ? move(dayPct, dayPct) : ''}<span class="muted" style="font-size:12px">${esc(q.venue || '')}</span>${pr?.marketCap ? `<span class="muted" style="font-size:12px" title="Market value: the price of all its shares (onvista)">· market value ${big(pr.marketCap, pr.marketCapCurrency)}</span>` : ''}</div>` : ''}
       </div>
       <div class="acts"><button class="btn" id="r-fav" type="button" aria-pressed="${!!d.favorite}"
           title="${d.held || d.following ? 'Star it: ★ Favorites groups them above' : 'Star it: it is followed too, so it gets a chip above'}">${favLabel(d.favorite)}</button>
