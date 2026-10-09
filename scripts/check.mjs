@@ -230,6 +230,17 @@ check('research: buying moves weight and country mix, rules colour the points', 
   assert.match(r.points.find(p => p.topic === 'In your depot').text, /More than your cash/);
 });
 
+check('research: a company from abroad that files like a US one (Credo, Cayman ISIN) counts Nasdaq\'s years', () => {
+  const an = { key: 'KYG254571055', name: 'Credo', type: 'STOCK', isin: 'KYG254571055', annual: [], notes: [],
+               profile: { country: 'Kaiman Inseln', currency: 'USD', venue: 'Nasdaq' },
+               us: { price: 100, years: [{ period: '2024-12-31', revenue: 100, netIncome: 5 }, { period: '2025-12-31', revenue: 140, netIncome: 10 }],
+                     market: { marketCap: 400 }, epsForecast: [], analysts: null, listedAs: 'CRDO', usFiler: true } };
+  const r = readout({ an, today: '2026-10-07' });
+  assert.equal(r.points.find(p => p.topic === 'Growth').tone, 'good');
+  assert.equal(r.stats.pe, 40);
+  assert.equal(r.points.find(p => p.topic === 'Listing').head, 'in US dollars');   // not an ADR
+});
+
 check('research: balance sheet, cash flow, returns, insiders, short interest, funds, trend', () => {
   const an = { key: 'US0000000001', name: 'X', type: 'STOCK', isin: 'US0000000001', profile: { shares: 1000 }, annual: [], notes: [],
                risk: { beta: 1.5, benchmark: 'MSCI World', volatility: 50 },
