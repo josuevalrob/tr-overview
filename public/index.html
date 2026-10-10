@@ -263,6 +263,11 @@
   .kv span:nth-child(even){text-align:right;font-variant-numeric:tabular-nums}
   #side table{font-size:12.5px}
   #side .seg{margin:0 6px 8px 0}
+  .cmp-b,form.cmp-f{margin-top:12px}
+  .cmp-k{align-items:center;margin:14px 0 0} .cmp-k .btn{margin-left:auto;padding:4px 10px;font-size:12.5px}
+  .cmpn th{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cmpn th i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  .cmpn td.win{color:var(--up);font-weight:600}
   @media (max-width:600px){ .hero .v{font-size:40px} }
   .slide{position:relative;padding:18px 0 0;margin:4px 0 14px}
   .slide input{-webkit-appearance:none;appearance:none;display:block;width:100%;height:8px;margin:8px 0;border-radius:4px;
@@ -889,24 +894,27 @@ const CMP = { format: v => {                     // 637,2 bn - German decimals, 
 const unit = c => (!c || c === 'EUR' ? '€' : curSym(c));
 const big = (v, cur = 'EUR') => v == null ? '–' : `${CMP.format(v)} ${unit(cur)}`;
 const money = (v, cur = 'EUR') => v == null ? '–' : `${nf(2, 2).format(v)} ${unit(cur)}`;
-const A = { key: null, data: null, period: 'annual', metric: 'revenue', hist: null, range: store.get('tro.prange', '1Y') };
+const A = { key: null, data: null, period: 'annual', metric: 'revenue', hist: null, range: store.get('tro.prange', '1Y'),
+            cmp: null, res: null, picking: false };   // cmp: the stock compared with (its analysis, prices, read-out); res: this one's read-out
 // who an estimate row is from: "Yahoo · EPS 2 analysts, revenue 2 analysts"
 const estBy = r => `${r.source ?? 'onvista'}${r.epsAnalysts ? ` · EPS ${r.epsAnalysts} analysts` : ''}${r.revenueAnalysts ? `, revenue ${r.revenueAnalysts} analysts` : ''}`;
 
-function closeAnalysis() { const el = $('#side'); el.classList.remove('on'); setTimeout(() => { el.hidden = true; }, 200); A.key = null; }
+function closeAnalysis() { const el = $('#side'); el.classList.remove('on'); setTimeout(() => { el.hidden = true; }, 200); A.key = null; A.cmp = null; A.picking = false; }
 addEventListener('keydown', e => { if (e.key === 'Escape' && A.key) closeAnalysis(); });
 
 async function openAnalysis(key) {
   const el = $('#side');
-  A.key = key; A.data = null; A.hist = null;
+  A.key = key; A.data = null; A.hist = null; A.res = null; A.picking = false;
+  if (A.cmp?.key === key) A.cmp = null;                                 // compared with itself: comparing ends
   el.hidden = false; void el.offsetWidth; el.classList.add('on');      // reflow first, so it slides in
   el.innerHTML = `<button class="x" aria-label="Close">×</button><h2>${esc(displayName(key))}</h2><p class="muted">Loading analysis…</p>`;
   el.querySelector('.x').onclick = closeAnalysis;
   try {
-    const [d, h] = await Promise.all([api(`/api/analysis/${encodeURIComponent(key)}`),
-                                      api(`/api/history/${encodeURIComponent(key)}`).catch(() => null)]);
+    const [d, h, r] = await Promise.all([api(`/api/analysis/${encodeURIComponent(key)}`),
+                                         api(`/api/history/${encodeURIComponent(key)}`).catch(() => null),
+                                         A.cmp ? readoutOf(key) : null]);
     if (A.key !== key) return;                      // another one was opened meanwhile
-    A.data = d; A.hist = h;
+    A.data = d; A.hist = h; A.res = r;
     if (!d.us?.[A.period === 'years' ? 'years' : 'quarterly'] && A.period !== 'annual') A.period = 'annual';
     renderAnalysis();
   } catch (e) { if (A.key === key) el.innerHTML += `<p class="down">${esc(e.message)}</p>`; }
@@ -1022,6 +1030,7 @@ function renderAnalysis() {
     <div class="id">${[d.isin, pr?.sector, pr?.country].filter(Boolean).map(esc).join(' · ')}</div>
     ${last != null ? `<div class="px"><span class="v">${price(last)}</span>${dayPct != null ? move(dayPct, dayPct) : ''}</div>` : ''}
     ${range}
+    ${A.cmp ? compareHtml(d) : `${pickerHtml()}
     ${A.hist?.closes?.length ? `<div class="sec" style="margin-top:14px"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">Price</h3>${rangeSeg('p-range', ['1M', '6M', '1Y', '5Y'], A.range)}</div>
       ${(() => { const t = S.data?.trades?.[d.key] || [];
         const k = [t.some(x => x.type === 'BUY') && '<span><i style="background:var(--good);border-radius:50%"></i>Your buys</span>',
@@ -1033,7 +1042,7 @@ function renderAnalysis() {
       ${pos ? `<span>You hold</span><span>${shares(pos.shares)} · ${eur(pos.value)}</span><span>Your gain</span><span class="${dir(pos.gain)}">${signed(pos.gain)} (${pct(pos.gainPct)})</span>` : ''}
     </div>
     ${analysts}${events}${quarters}${fin}${dividends}${facts}${listings}
-    ${d.notes.length ? `<p class="note">${d.notes.map(esc).join(' ')}</p>` : ''}
+    ${d.notes.length ? `<p class="note">${d.notes.map(esc).join(' ')}</p>` : ''}`}
     <p class="note">Sources: onvista${us ? `, Nasdaq${us.listedAs ? ` (US listing ${esc(us.listedAs)})` : ''}` : ''}${d.estimates ? `, Yahoo (${esc(d.estimates.symbol)})` : ''}. Not investment advice.</p>`;
   el.querySelector('.x').onclick = closeAnalysis;
   el.querySelectorAll('#a-period button').forEach(b => b.onclick = () => { A.period = b.dataset.p; renderAnalysis(); });
@@ -1057,6 +1066,8 @@ function renderAnalysis() {
     const pts = rowsF.filter(r => r[A.metric] != null);
     if (pts.length) finChart(host, pts.map(r => r.label), pts.map(r => r[A.metric]), cur, metrics.find(([k]) => k === A.metric)[1], pts.map(r => r.estimate ? estBy(r) : null));
   }
+  wirePicker();
+  if (A.cmp) drawCompare(d);
 }
 
 /** Columns for one financial metric. Negative years grow down in the diverging red; an estimate (est[i]: who from) hollow. */
@@ -1092,25 +1103,288 @@ function finChart(host, labels, values, cur, name, est = []) {
   });
 }
 
+// ------------------------------------------------------------ compare: one more stock on the same charts
+// The sidebar's stock (blue) against one more (orange), the two lines on top of each other: price since the same
+// day, revenue since the same year, EBIT margin, P/E over time - then five numbers, the better one green.
+const RO = new Map();                               // read-outs asked for this session: { at, p } by key
+function readoutOf(key) {
+  const h = RO.get(key);
+  if (h && Date.now() - h.at < 30 * 6e4) return h.p;
+  const p = api(`/api/research/${encodeURIComponent(key)}`).catch(() => { RO.delete(key); return null; });
+  RO.set(key, { at: Date.now(), p });
+  return p;
+}
+
+const PK = { list: [], at: -1, seq: 0, timer: 0 };
+const pickerHtml = () => A.picking
+  ? `<form class="add cmp-f" id="a-cf"><div class="sugg-wrap"><input id="a-cq" placeholder="Compare with: name, ISIN or US ticker" autocomplete="off"
+       role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="a-cs"><ul class="sugg" id="a-cs" role="listbox" hidden></ul></div>
+       <button class="btn" type="button" id="a-cn">Cancel</button></form>`
+  : `<button class="btn cmp-b" id="a-cmp">Compare with…</button>`;
+// your stocks and the watchlist first, by name; then what the search finds
+function ownHits(q) {
+  const t = q.toLowerCase(), seen = new Set([A.key]);
+  return [...(S.data?.positions || []), ...S.watch]
+    .filter(x => !seen.has(x.key) && seen.add(x.key) && (!t || x.name?.toLowerCase().includes(t) || x.key.toLowerCase() === t))
+    .slice(0, 8).map(x => ({ key: x.key, name: x.name, own: heldPos(x.key) ? 'in your depot' : 'on your watchlist' }));
+}
+function drawPicks() {
+  const ul = $('#a-cs'), inp = $('#a-cq');
+  if (!ul) return;
+  const show = PK.list.length > 0 && document.activeElement === inp;
+  ul.hidden = !show; inp.setAttribute('aria-expanded', String(show));
+  ul.innerHTML = PK.list.map((h, i) => `<li role="option" data-i="${i}" aria-selected="${i === PK.at}"><span class="n">${esc(h.name)}</span>
+    <span class="m">${esc(h.own ?? [h.isin, h.us ? `${h.us.exchange}: ${h.us.ticker}` : null, KIND[h.type] ?? h.type].filter(Boolean).join(' · '))}</span></li>`).join('');
+}
+function wirePicker() {
+  if ($('#a-cmp')) $('#a-cmp').onclick = () => { A.picking = true; renderAnalysis(); PK.list = ownHits(''); PK.at = -1; $('#a-cq').focus(); drawPicks(); };
+  const inp = $('#a-cq');
+  if (!inp) return;
+  $('#a-cn').onclick = () => { A.picking = false; renderAnalysis(); };
+  inp.oninput = () => {
+    clearTimeout(PK.timer);
+    const q = inp.value.trim(), seq = ++PK.seq;
+    PK.list = ownHits(q); PK.at = -1; drawPicks();
+    if (q.length >= 2) PK.timer = setTimeout(async () => {
+      try {
+        const found = (await api(`/api/search?q=${encodeURIComponent(q)}`)).results;
+        if (seq !== PK.seq) return;                  // typed on meanwhile
+        const have = new Set([A.key, ...PK.list.map(h => h.key)]);
+        PK.list = [...PK.list, ...found.filter(h => !have.has(h.key))].slice(0, 10); drawPicks();
+      } catch { /* the next keystroke asks again */ }
+    }, 250);
+  };
+  inp.onkeydown = ev => {
+    if (ev.key === 'Escape') { ev.stopPropagation(); A.picking = false; return renderAnalysis(); }
+    if (!PK.list.length || !['ArrowDown', 'ArrowUp'].includes(ev.key)) return;
+    ev.preventDefault();
+    const n = PK.list.length;
+    PK.at = ev.key === 'ArrowDown' ? (PK.at + 1) % n : (PK.at <= 0 ? n - 1 : PK.at - 1);
+    drawPicks();
+  };
+  inp.onfocus = drawPicks;
+  inp.onblur = () => setTimeout(drawPicks, 0);
+  $('#a-cs').onmousedown = ev => {                   // before the input's blur hides the list
+    const li = ev.target.closest('li[data-i]');
+    if (li) { ev.preventDefault(); compareWith(PK.list[li.dataset.i]); }
+  };
+  $('#a-cf').onsubmit = ev => { ev.preventDefault(); const h = PK.list[Math.max(0, PK.at)]; if (h) compareWith(h); };
+}
+
+async function compareWith(hit) {
+  const key = A.key;
+  A.picking = false; A.cmp = { key: hit.key, name: hit.name, loading: true }; renderAnalysis();
+  const [an, hist, res, own] = await Promise.all([
+    api(`/api/analysis/${encodeURIComponent(hit.key)}`).catch(e => ({ error: e.message })),
+    api(`/api/history/${encodeURIComponent(hit.key)}`).catch(() => null), readoutOf(hit.key), A.res ?? readoutOf(key)]);
+  if (A.key !== key || A.cmp?.key !== hit.key) return;   // closed, or another one picked meanwhile
+  A.res = own;
+  A.cmp = an.error ? { key: hit.key, name: hit.name, error: an.error } : { key: hit.key, name: res?.name ?? hit.name, an, hist, res };
+  renderAnalysis();
+}
+
+// a fiscal year by the calendar year it ends in: '2025' -> 2025, '24/25' -> 2025
+const fyOf = l => { const s = String(l); return /^\d{4}$/.test(s) ? +s : /^\d{2}\/\d{2}$/.test(s) ? 2000 + +s.slice(3) : null; };
+function byYear(rows, f) {
+  const m = new Map();
+  for (const r of rows || []) { const y = fyOf(r.label), v = f(r); if (y && v != null && Number.isFinite(v)) m.set(y, { v, est: !!r.estimate }); }
+  return m;
+}
+const yearsFrom = (lo, ...ms) => { const hi = Math.max(...ms.flatMap(m => [...m.keys()])); return !Number.isFinite(lo) || !Number.isFinite(hi) || hi < lo ? [] : Array.from({ length: hi - lo + 1 }, (_, i) => lo + i); };
+const reportedYears = m => [...m].filter(([, x]) => !x.est).map(([y]) => y).sort((a, b) => a - b);
+
+// both stocks' yearly lines: revenue as % since the first year both reported (ten years back at most), EBIT margin as it is
+function cmpView(d) {
+  const b = A.cmp.an;
+  const ra = byYear(d.annual, r => (r.revenue > 0 ? r.revenue : null)), rb = byYear(b.annual, r => (r.revenue > 0 ? r.revenue : null));
+  const both = reportedYears(ra).filter(y => rb.get(y) && !rb.get(y).est), base = both.find(y => y >= both.at(-1) - 9);
+  const grow = m => yrs => yrs.map(y => (m.get(y) ? (m.get(y).v / m.get(base).v - 1) * 100 : null));
+  const yr = base != null ? yearsFrom(base, ra, rb) : [];
+  const ma = byYear(d.annual, r => r.ebitMargin), mb = byYear(b.annual, r => r.ebitMargin);
+  const ym = yearsFrom(Math.max(...[...reportedYears(ma), ...reportedYears(mb)]) - 9, ma, mb);
+  const line = (m, yrs, v) => ({ values: v ?? yrs.map(y => m.get(y)?.v ?? null), est: yrs.map(y => !!m.get(y)?.est) });
+  return {
+    rev: base != null ? { base, years: yr, a: line(ra, yr, grow(ra)(yr)), b: line(rb, yr, grow(rb)(yr)) } : null,
+    mar: ym.length && (ma.size || mb.size) ? { years: ym, a: line(ma, ym), b: line(mb, ym) } : null,
+  };
+}
+
+function compareHtml(d) {
+  const C = A.cmp;
+  const head = `<div class="keys cmp-k"><span><i style="background:var(--s1)"></i>${esc(nameOf(d))}</span>
+    <span><i style="background:var(--s2)"></i>${esc(C.name)}</span><button class="btn" id="a-cx">Stop comparing</button></div>`;
+  if (C.loading) return `${head}<p class="muted">Loading ${esc(C.name)}…</p>`;
+  if (C.error) return `${head}<p class="down">${esc(C.error)}</p>`;
+  A.view = cmpView(d);
+  return `${head}
+    <div class="sec"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">Price, % since the start</h3>${rangeSeg('p-range', ['1M', '6M', '1Y', '5Y'], A.range)}</div>
+      <div class="chart" id="c-price"></div></div>
+    <div class="sec"><h3>Revenue, % since ${A.view.rev?.base ?? '–'}</h3><div class="chart" id="c-rev"></div></div>
+    <div class="sec"><h3>EBIT margin</h3><div class="chart" id="c-mar"></div></div>
+    <div class="sec"><h3>P/E over time <span class="muted" style="font-weight:400">· dashed: each one's median</span></h3><div class="chart" id="c-pe"></div></div>
+    <div class="sec"><h3>Now</h3>${cmpTable(d)}</div>
+    <p class="note">Prices in euros, without dividends. Price and revenue on a log scale: the same height is the same growth. Revenue and margin: onvista's years, each company's fiscal year by the year it ends in;
+      dashed, hollow: the analysts' estimates. P/E: the price over the last reported year's earnings - US filers' reported profit, others onvista's adjusted EPS.
+      Green: the better of the two. Not investment advice.</p>`;
+}
+
+function cmpTable(d) {
+  const C = A.cmp, s1 = A.res?.stats, s2 = C.res?.stats;
+  const n1 = x => nf(1, 1).format(x);
+  const it = (v, f) => (v == null ? null : { v, t: f(v) });
+  const score = r => (r?.score?.score != null ? { v: r.score.score, t: `${N0.format(r.score.score)} <span class="muted">· ${r.score.good} for, ${r.score.bad} against</span>` } : null);
+  const fpe = s => { const v = s?.ntmPe ?? s?.forwardPe?.[0]?.pe; return v > 0 ? v : null; };
+  const pfcf = s => s?.priceFcf ?? (s?.fcfYield > 0 ? 100 / s.fcfYield : null);
+  const lastOf = (an, k) => an.annual.filter(r => !r.estimate && r[k] != null).at(-1)?.[k] ?? null;
+  const yld = an => lastOf(an, 'divYield') ?? (an.annual.some(r => !r.estimate) && !an.annual.some(r => r.dps > 0) ? 0 : null);
+  const rows = [
+    ['Score', 'hi', score(A.res), score(C.res), 'The Research read-out: points for ÷ (for + against)'],
+    ['Forward P/E', 'lo', it(fpe(s1), n1), it(fpe(s2), n1), "Price ÷ the analysts' earnings for the next 12 months (else next year) - lower is cheaper"],
+    ['Price / free cash flow', 'lo', it(pfcf(s1), n1), it(pfcf(s2), n1), "Market value ÷ the last year's free cash flow - lower is cheaper"],
+    ['Dividend yield', 'hi', it(yld(d), x => `${n1(x)} %`), it(yld(C.an), x => `${n1(x)} %`), 'The last reported year (onvista)'],
+    ['Equity ratio', 'hi', it(lastOf(d, 'equityRatio'), x => `${N0.format(x)} %`), it(lastOf(C.an, 'equityRatio'), x => `${N0.format(x)} %`),
+     'Equity ÷ total assets, the last reported year - higher: less debt. Banks run low by nature'],
+  ];
+  return `<div class="scroll"><table class="cmpn"><thead><tr><th></th><th><i style="background:var(--s1)"></i>${esc(nameOf(d))}</th>
+    <th><i style="background:var(--s2)"></i>${esc(C.name)}</th></tr></thead><tbody>
+    ${rows.map(([l, better, a, b, help]) => {
+      const w = a && b && a.v !== b.v ? ((better === 'hi') === (a.v > b.v) ? 1 : 2) : 0;
+      return `<tr title="${esc(help)}"><td>${l}</td><td${w === 1 ? ' class="win"' : ''}>${a?.t ?? '–'}</td><td${w === 2 ? ' class="win"' : ''}>${b?.t ?? '–'}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+// b's value on each of a's days: its last close on or before it
+function onDays(days, closes) {
+  let j = -1;
+  return days.map(dt => { while (j + 1 < closes.length && closes[j + 1][0] <= dt) j++; return j < 0 ? null : closes[j][1]; });
+}
+const pc0 = v => { const r = Math.round(v); return `${r > 0 ? '+' : r < 0 ? '−' : ''}${N0.format(Math.abs(r))} %`; };
+// the sidebar's stock by name - one neither held nor followed has only its read-out's
+const nameOf = d => heldPos(d.key)?.name || watchItem(d.key)?.name || A.res?.name || d.key;
+
+function drawCompare(d) {
+  const C = A.cmp, V = A.view;
+  $('#a-cx').onclick = () => { A.cmp = null; renderAnalysis(); };
+  if (C.loading || C.error) return;
+  const nA = nameOf(d), nB = C.name;
+
+  // price: both from the first day both have one in the range
+  const today = S.data?.today ?? new Date().toISOString().slice(0, 10);
+  const start = new Date(Date.parse(today) - { '1M': 31, '6M': 183, '1Y': 366, '5Y': 5 * 366 }[A.range] * 864e5).toISOString().slice(0, 10);
+  const withLive = h => { const c = (h?.closes || []).slice(); if (h?.live?.last && c.length && c.at(-1)[0] < today) c.push([today, h.live.last]); return c; };
+  const pa = withLive(A.hist).filter(([dt]) => dt >= start), pb = onDays(pa.map(p => p[0]), withLive(C.hist).filter(([dt]) => dt >= start));
+  const i0 = pa.findIndex((p, i) => p[1] > 0 && pb[i] > 0);
+  if (i0 < 0) $('#c-price').innerHTML = `<p class="muted">No prices of both for this range.</p>`;
+  else timeChart($('#c-price'), { dates: pa.slice(i0).map(p => p[0]), H: 180,
+    series: [{ name: nA, color: '--s1', values: pa.slice(i0).map(p => (p[1] / pa[i0][1] - 1) * 100) },
+             { name: nB, color: '--s2', values: pb.slice(i0).map(v => (v == null ? null : (v / pb[i0] - 1) * 100)) }],
+    fmtTick: pc0, fmtVal: v => (v == null ? '–' : pc0(v)), log: true });
+
+  const yearly = (id, v, fmtTick, fmtVal, log = false) => {
+    if (!v) { $(id).innerHTML = '<p class="muted">No year both reported.</p>'; return; }
+    yearChart($(id), { years: v.years, fmtTick, fmtVal, log, series: [{ name: nA, color: '--s1', ...v.a }, { name: nB, color: '--s2', ...v.b }] });
+  };
+  yearly('#c-rev', V.rev, pc0, pc0, true);
+  yearly('#c-mar', V.mar, v => `${N0.format(v)} %`, v => `${nf(1, 1).format(v)} %`);
+
+  // P/E: both on every day either has one; each line only within its own years
+  const P = A.res?.pe, Q = C.res?.pe;
+  if (!P && !Q) { $('#c-pe').innerHTML = '<p class="muted">No P/E history for either.</p>'; return; }
+  const days = [...new Set([...(P?.dates ?? []), ...(Q?.dates ?? [])])].sort();
+  const on = X => { let j = -1; return days.map(dt => { while (j + 1 < X.dates.length && X.dates[j + 1] <= dt) j++; return j < 0 ? undefined : X.values[j]; }); };
+  const series = [];
+  for (const [X, name, color] of [[P, nA, '--s1'], [Q, nB, '--s2']]) {
+    if (!X) continue;
+    const v = on(X);
+    series.push({ name, color, values: v }, { name: `${name}, median`, color, dash: true, values: v.map(x => (x === undefined ? undefined : X.median)) });
+  }
+  timeChart($('#c-pe'), { dates: days, series, H: 180, fmtTick: v => N0.format(v), fmtVal: v => (v == null ? 'loss or over 100' : nf(1, 1).format(v)) });
+}
+
+/**
+ * A log axis for % changes, so that the same height is the same growth: +100 % (×2) as tall from 0 % as from +100 % to +300 %.
+ * Ticks at 1, 2 and 5 times each power of ten (as % changes: −50 %, 0 %, +100 %, +400 %, +900 % …), only the powers of ten when
+ * that is more than six. { min, max } in log space, at(v): a % change there.
+ */
+function logAxis(vals) {
+  const ix = vals.map(v => 1 + v / 100).filter(v => v > 0), lo = Math.min(...ix), hi = Math.max(...ix);
+  const cand = [];
+  for (let e = Math.floor(Math.log10(lo)) - 1; e <= Math.ceil(Math.log10(hi)) + 1; e++) for (const f of [1, 2, 5]) cand.push(f * 10 ** e);
+  const bot = cand.filter(t => t <= lo).at(-1), top = cand.find(t => t >= (hi > lo ? hi : lo * 1.05));
+  let ticks = cand.filter(t => t >= bot && t <= top);
+  if (ticks.length > 6) ticks = ticks.filter(t => Math.abs(Math.log10(t) - Math.round(Math.log10(t))) < 1e-9);
+  return { min: Math.log10(bot), max: Math.log10(top), ticks: ticks.map(t => (t - 1) * 100), at: v => Math.log10(Math.max(1e-6, 1 + v / 100)) };
+}
+
+/**
+ * Lines by year, for comparing on one axis: reported years solid, the analysts' years dashed (hollow dots)
+ * on from the last reported one. series: [{ name, color, values (null: none that year), est: [bool] }]
+ */
+function yearChart(host, { years, series, fmtTick, fmtVal, H = 170, log = false }) {
+  const W = Math.max(300, host.clientWidth), m = { l: 48, r: 12, t: 10, b: 24 };
+  const n = years.length, vals = series.flatMap(s => s.values).filter(v => v != null);
+  if (!n || !vals.length) { host.innerHTML = '<p class="muted">No figures to compare.</p>'; return; }
+  const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  const ax = log ? logAxis(vals) : null, step = niceStep((hi - lo || 1) / 4);
+  const max = ax ? ax.max : Math.ceil(hi / step) * step, min = ax ? ax.min : Math.floor(lo / step) * step;
+  const x = i => m.l + (n === 1 ? (W - m.l - m.r) / 2 : (i * (W - m.l - m.r)) / (n - 1));
+  const y = v => m.t + (H - m.t - m.b) * ((max - (ax ? ax.at(v) : v)) / (max - min || 1));
+  let g = '';
+  const grid = ax ? ax.ticks : [];
+  if (!ax) for (let v = min; v <= max + step / 2; v += step) grid.push(v);
+  for (const v of grid) {
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(${(ax ? v === 0 : Math.abs(v) < step / 2) ? '--axis' : '--grid'})" stroke-width="1"/>`;
+    g += `<text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${esc(fmtTick(v))}</text>`;
+  }
+  const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((W - m.l - m.r) / 40))));
+  years.forEach((yr, i) => { if (showLabel(i, n, every)) g += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${yr}</text>`; });
+  const P = (i, v) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+  for (const s of series) {
+    let solid = '', dash = '', dots = '', prev = null;          // prev: the last point drawn, [i, v, estimate]
+    s.values.forEach((v, i) => {
+      if (v == null) { prev = null; return; }
+      if (s.est[i]) dash += `M${prev ? P(prev[0], prev[1]) : P(i, v)}L${P(i, v)}`;
+      else solid += `${prev && !prev[2] ? 'L' : 'M'}${P(i, v)}`;
+      dots += `<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="var(${s.est[i] ? '--surface' : s.color})" stroke="var(${s.color})" stroke-width="1.5"/>`;
+      prev = [i, v, s.est[i]];
+    });
+    g += `<path d="${solid}" fill="none" stroke="var(${s.color})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`
+       + `<path d="${dash}" fill="none" stroke="var(${s.color})" stroke-width="2" stroke-dasharray="4 3"/>${dots}`;
+  }
+  g += `<line class="cross" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" stroke="var(--axis)" stroke-width="1" visibility="hidden"/>`;
+  g += `<rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent"/>`;
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map(s => s.name).join(' and '))} by year">${g}</svg>`;
+  const svg = host.querySelector('svg'), cross = svg.querySelector('.cross');
+  svg.onpointermove = ev => {
+    const r = svg.getBoundingClientRect(), px = ((ev.clientX - r.left) / r.width) * W;
+    const i = Math.max(0, Math.min(n - 1, Math.round(n === 1 ? 0 : ((px - m.l) / (W - m.l - m.r)) * (n - 1))));
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+    showTip(ev, `<div class="t">${years[i]}</div>` + series.map(s => tipRow(s.name, s.values[i] == null ? '–' : `${fmtVal(s.values[i])}${s.est[i] ? ' est.' : ''}`, `var(${s.color})`)).join(''));
+  };
+  svg.onpointerleave = () => { hideTip(); cross.setAttribute('visibility', 'hidden'); };
+}
+
 /**
  * A line over days. Points are spaced by index (trading days), not calendar time.
  * series: [{name, color, values, dash?, dots?: [{i, text}]}] · markers: [{i, kind: 'buy'|'sell', text}]
  * A value null is a gap with a tip ("loss"); undefined, outside the series - no tip. A series with
  * dots carries its numbers there, not at its end.
  */
-function timeChart(host, { dates, series, markers = [], fmtTick, fmtVal, H = 220 }) {
+function timeChart(host, { dates, series, markers = [], fmtTick, fmtVal, H = 220, log = false }) {
   const W = Math.max(300, host.clientWidth), m = { l: 58, r: series.length > 1 ? 86 : 70, t: 10, b: 26 };
   const n = dates.length;
   if (!n) { host.innerHTML = '<p class="muted">No prices for this range.</p>'; return; }
   const vals = series.flatMap(s => s.values).filter(v => v != null);
   let lo = Math.min(...vals), hi = Math.max(...vals);
   if (hi === lo) { hi += Math.abs(hi) * 0.05 || 1; lo -= Math.abs(lo) * 0.05 || 1; }
-  const step = niceStep((hi - lo) / 4);
-  const min = Math.floor(lo / step) * step, max = Math.ceil(hi / step) * step;
+  const ax = log ? logAxis(vals) : null, step = niceStep((hi - lo) / 4);
+  const min = ax ? ax.min : Math.floor(lo / step) * step, max = ax ? ax.max : Math.ceil(hi / step) * step;
   const x = i => m.l + (n === 1 ? (W - m.l - m.r) / 2 : (i * (W - m.l - m.r)) / (n - 1));
-  const y = v => m.t + (H - m.t - m.b) * ((max - v) / (max - min || 1));
+  const y = v => m.t + (H - m.t - m.b) * ((max - (ax ? ax.at(v) : v)) / (max - min || 1));
   let g = '';
-  for (let v = min; v <= max + step / 2; v += step) {
+  const grid = ax ? ax.ticks : [];
+  if (!ax) for (let v = min; v <= max + step / 2; v += step) grid.push(v);
+  for (const v of grid) {
     g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
     g += `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${esc(fmtTick(v))}</text>`;
   }
