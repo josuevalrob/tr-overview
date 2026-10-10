@@ -922,7 +922,9 @@ async function openAnalysis(key) {
 
 const heldPos = key => (S.data?.positions || []).find(p => p.key === key);
 const watchItem = key => S.watch.find(w => w.key === key);
-const displayName = key => heldPos(key)?.name || watchItem(key)?.name || key;
+// held or followed: the name there; else the analysis's, once it is in ("SANOFI" -> "Sanofi", as the server does)
+const titleCase = s => (s === s.toUpperCase() ? s.toLowerCase().replace(/\b\p{L}/gu, c => c.toUpperCase()) : s);
+const displayName = key => heldPos(key)?.name || watchItem(key)?.name || (A.data?.key === key && A.data.name ? titleCase(A.data.name) : key);
 
 function renderAnalysis() {
   const d = A.data, el = $('#side'), pos = heldPos(d.key), w = watchItem(d.key);
@@ -1211,7 +1213,7 @@ function cmpView(d) {
 
 function compareHtml(d) {
   const C = A.cmp;
-  const head = `<div class="keys cmp-k"><span><i style="background:var(--s1)"></i>${esc(nameOf(d))}</span>
+  const head = `<div class="keys cmp-k"><span><i style="background:var(--s1)"></i>${esc(displayName(d.key))}</span>
     <span><i style="background:var(--s2)"></i>${esc(C.name)}</span><button class="btn" id="a-cx">Stop comparing</button></div>`;
   if (C.loading) return `${head}<p class="muted">Loading ${esc(C.name)}…</p>`;
   if (C.error) return `${head}<p class="down">${esc(C.error)}</p>`;
@@ -1245,7 +1247,7 @@ function cmpTable(d) {
     ['Equity ratio', 'hi', it(lastOf(d, 'equityRatio'), x => `${N0.format(x)} %`), it(lastOf(C.an, 'equityRatio'), x => `${N0.format(x)} %`),
      'Equity ÷ total assets, the last reported year - higher: less debt. Banks run low by nature'],
   ];
-  return `<div class="scroll"><table class="cmpn"><thead><tr><th></th><th><i style="background:var(--s1)"></i>${esc(nameOf(d))}</th>
+  return `<div class="scroll"><table class="cmpn"><thead><tr><th></th><th><i style="background:var(--s1)"></i>${esc(displayName(d.key))}</th>
     <th><i style="background:var(--s2)"></i>${esc(C.name)}</th></tr></thead><tbody>
     ${rows.map(([l, better, a, b, help]) => {
       const w = a && b && a.v !== b.v ? ((better === 'hi') === (a.v > b.v) ? 1 : 2) : 0;
@@ -1259,14 +1261,13 @@ function onDays(days, closes) {
   return days.map(dt => { while (j + 1 < closes.length && closes[j + 1][0] <= dt) j++; return j < 0 ? null : closes[j][1]; });
 }
 const pc0 = v => { const r = Math.round(v); return `${r > 0 ? '+' : r < 0 ? '−' : ''}${N0.format(Math.abs(r))} %`; };
-// the sidebar's stock by name - one neither held nor followed has only its read-out's
-const nameOf = d => heldPos(d.key)?.name || watchItem(d.key)?.name || A.res?.name || d.key;
+
 
 function drawCompare(d) {
   const C = A.cmp, V = A.view;
   $('#a-cx').onclick = () => { A.cmp = null; renderAnalysis(); };
   if (C.loading || C.error) return;
-  const nA = nameOf(d), nB = C.name;
+  const nA = displayName(d.key), nB = C.name;
 
   // price: both from the first day both have one in the range
   const today = S.data?.today ?? new Date().toISOString().slice(0, 10);
