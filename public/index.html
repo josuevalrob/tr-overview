@@ -290,6 +290,10 @@
                        background:var(--raised);color:var(--ink);width:78px;text-align:right}
   .kt input.w{width:150px;text-align:left}
   .kt th input{display:block;margin:0 0 4px auto;text-align:left}
+  .ft td,.ft th{text-align:left;white-space:normal}
+  .ft td:first-child{min-width:0;white-space:nowrap}
+  .ft td.n,.ft th.n{text-align:right;white-space:nowrap}
+  .ft td.w{min-width:260px;white-space:normal}
   .badge{display:inline-block;font-size:12px;font-weight:600;color:var(--critical);border:1px solid var(--critical);border-radius:999px;padding:0 8px;margin-left:6px}
   .amtv{font-size:26px;font-weight:600;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
   .ro{list-style:none;margin:6px 0 0;padding:0}
@@ -2216,9 +2220,9 @@ function renderResearch() {
     <p class="sub">${U.up != null ? `Up <b>${p0(U.up)}</b> to the analysts' average target (${price(U.target)}${U.analysts != null ? `, ${U.analysts} analyst${U.analysts === 1 ? '' : 's'}` : ''})` : 'No analysts\' target found'}${U.down != null ? ` · down <b>${p0(U.down)}</b> to the ${esc(U.downTo)} (${price(U.level)})` : ''}${U.ratio != null ? ` · <b>${nf(0, 1).format(U.ratio)} €</b> up for each 1 € down` : ''}.</p>
     <div class="keys"><span><i style="background:var(--s1)"></i>Price</span><span><i style="background:var(--s2)"></i>200-day average</span>${U.target ? '<span><i style="background:var(--c3)"></i>Analysts\' average target</span>' : ''}</div>
     <div class="chart" id="r-ud"></div>
-    <p class="note">The last year of closes${q?.venue ? `, ${esc(q.venue)}` : ''}. Up: the analysts' average target${U.target ? ` (their range ${price(U.low)} – ${price(U.high)})` : ''} - Nasdaq's for US-listed shares, else Yahoo's - in euros at today's price. Down: the 200-day average - where the trend would break - or the 52-week low when the price is already under it. Green from 2 € up for each 1 € down, red under 1 €; fewer than 3 analysts: not coloured. Not a forecast.</p></div>` : '';
+    <p class="note">The last year of closes${q?.venue ? `, ${esc(q.venue)}` : ''}. Up: the analysts' average target${U.target ? ` (their range ${price(U.low)} – ${price(U.high)})` : ''} - Nasdaq's for US-listed shares, else Yahoo's, else each firm's latest rating in its company file - in euros at today's price. Down: the 200-day average - where the trend would break - or the 52-week low when the price is already under it. Green from 2 € up for each 1 € down, red under 1 €; fewer than 3 analysts: not coloured. Not a forecast.</p></div>` : '';
 
-  $('#r-body').innerHTML = head + ud + sectors + gains + pe + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div>' : '')
+  $('#r-body').innerHTML = head + ud + sectors + gains + pe + (d.isin && d.type === 'STOCK' ? '<div id="r-kpirow"><div class="card" id="r-kpi"></div><div class="card" id="r-kpic" hidden></div></div><div class="card" id="r-file"></div>' : '')
     + `<div class="pair">${fit}${news}</div>`;
   $('#r-more').onclick = () => openAnalysis(d.key);
   if (secs) fundRing($('#r-sec'), secs, ['sector', 'sectors']);
@@ -2271,6 +2275,7 @@ function renderResearch() {
   };
   renderPe(); renderUd(); wireScen();
   R.kedit = false; renderKpis();
+  R.fedit = false; renderFile();
   const sl = $('#r-slide');
   if (sl) {
     sl.oninput = () => { R.amount = Number(sl.value) || 0; drawFit(); };
@@ -2564,6 +2569,115 @@ function renderKpiEdit(box, t) {
       await api(`/api/kpi-lines/${encodeURIComponent(d.key)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lines }) });
       toast(`Saved to <b>data/kpis/${esc(d.isin)}.json</b>`);
       openResearch(d.key);                          // the read-out's line for it changes too
+    } catch (e) { toast(`<span class="down">${esc(e.message)}</span>`); }
+  };
+}
+
+// ------------------------------------------------------------ company file (data/dossier/<ISIN>.json)
+// What no feed has for it: contracts, who runs it, insiders' and politicians' trades, holders, analysts' ratings,
+// events past and coming - each item with its source. Filled by an agent through the MCP tool company_file, or here.
+const FILE = [['events', 'Events'], ['contracts', 'Contracts'], ['ratings', 'Analysts'], ['dealings', 'Trades'], ['people', 'People'], ['holders', 'Holders']];
+R.fsec = store.get('tro.rfile', 'events');
+const src = x => x.source ? `<a href="${esc(x.source)}" target="_blank" rel="noopener noreferrer" title="${esc(x.source)}">↗</a>` : '';
+const sym$ = c => ({ EUR: '€', USD: '$', GBP: '£' }[c] ?? c ?? '');
+const amt = (v, u, c) => v == null ? '<span class="muted">not disclosed</span>' : `${nf(0, 2).format(v)} ${u === 'bn' ? 'bn' : 'm'} ${esc(sym$(c))}`;
+const big$ = v => v >= 1e9 ? `${nf(0, 1).format(v / 1e9)} bn` : v >= 1e6 ? `${nf(0, 1).format(v / 1e6)} m` : N0.format(v);
+const pill = (t, c = '--s1') => `<span class="badge" style="color:var(${c});border-color:var(${c})">${esc(t)}</span>`;
+function renderFile() {
+  const box = $('#r-file'); if (!box) return;
+  const d = R.data, F = d.dossier?.file, B = d.dossier?.brief, path = `data/dossier/${d.isin}.json`;
+  if (R.fedit) return renderFileEdit(box, F);
+  if (!F) {
+    box.innerHTML = `<div class="row" style="margin:0"><div><h2>Company file</h2>
+      <p class="sub" style="margin:0">None yet for ${esc(d.name)}. What no feed has: the contracts it won, who runs it, insiders' and politicians' trades, who holds it, analysts' ratings, events past and coming - each with its source. Ask an agent through the MCP tool <b>company_file</b>, or add it here. Saved on this machine in <b>${esc(path)}</b>.</p></div>
+      <button class="btn" id="f-edit" type="button">Add</button></div>`;
+    return ($('#f-edit').onclick = () => { R.fedit = true; renderFile(); });
+  }
+  const today = new Date().toISOString().slice(0, 10), last = d.quote?.last ?? null;
+  if (!FILE.some(([k]) => k === R.fsec)) R.fsec = 'events';
+  // the newest 12 (and every coming event); the rest on "all"
+  const every = F[R.fsec] ?? [], cut = R.fall === R.fsec ? every.length : 12;
+  const rows = every.filter((x, i) => i < cut || (x.date ?? '') >= today);
+  const T = (head, body) => `<div class="scroll"><table class="kt ft"><thead><tr>${head.map(h => h.startsWith('#') ? `<th class="n">${h.slice(1)}</th>` : `<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
+  const view = {
+    events() {
+      const ahead = rows.filter(x => x.date >= today).sort((a, b) => a.date.localeCompare(b.date)), past = rows.filter(x => x.date < today);
+      return T(['Date', 'What', 'Kind', ''], ahead.concat(past).map(x => `<tr><td>${esc(day(x.date))}${x.date >= today ? pill('coming') : ''}</td>
+        <td class="w"><b>${esc(x.title)}</b>${x.note ? `<span class="small muted">${esc(x.note)}</span>` : ''}</td><td>${esc(x.kind)}</td><td>${src(x)}</td></tr>`).join(''));
+    },
+    contracts() {
+      const C = B?.contracts;
+      return `${C ? `<p class="sub">Last 12 months: <b>${C.n}</b> announced${C.priced ? `, ${C.priced} with a value - ≈ <b>${big$(C.eur)} €</b> in all` : ''}${C.pending.length ? ` · pending: ${C.pending.map(x => esc(x.customer ?? x.what)).join(', ')}` : ''}. Acquisitions, sales and investments are not counted as won.</p>` : ''}`
+        + T(['Date', 'Customer', 'What', '#Value', 'Delivery', 'Status', ''], rows.map(x => `<tr><td>${esc(day(x.date))}</td><td>${esc(x.customer ?? '')}</td>
+          <td class="w">${esc(x.what)}${x.share ? `<span class="small muted">${esc(x.share)}</span>` : ''}${x.note ? `<span class="small muted">${esc(x.note)}</span>` : ''}</td>
+          <td class="n">${amt(x.value, x.unit, x.currency)}</td><td>${esc(x.delivery ?? '')}</td><td>${esc(x.kind)} · ${x.status === 'pending' ? pill('pending', '--critical') : esc(x.status)}</td><td>${src(x)}</td></tr>`).join(''));
+    },
+    ratings() {
+      const A = B?.analysts, up = A?.target && last ? (A.target / last - 1) * 100 : null;
+      return `${A ? `<p class="sub">Each firm's latest rating of the last 12 months: <b class="up">${A.buy} buy</b> · ${A.hold} hold · <b class="down">${A.sell} sell</b>${A.target ? ` · average target <b>${price(A.target)}</b>${up != null ? ` (<span class="${dir(up)}">${p0(up)}</span> on today's ${price(last)})` : ''}, range ${price(A.low)} – ${price(A.high)}` : ''}. The read-out counts them where no feed has analysts.</p>` : ''}`
+        + T(['Date', 'Firm', 'Rating', '#Target', '#vs today', ''], rows.map(x => { const u = x.target && last && x.currency === 'EUR' ? (x.target / last - 1) * 100 : null; return `<tr><td>${esc(day(x.date))}</td><td>${esc(x.firm)}</td>
+          <td><span class="${x.rating === 'buy' ? 'up' : x.rating === 'sell' ? 'down' : ''}">${esc(x.ratingText ?? x.rating)}</span></td>
+          <td class="n">${x.target != null ? `${nf(0, 2).format(x.target)} ${esc(sym$(x.currency))}${x.previousTarget != null ? ` <span class="small muted">from ${nf(0, 2).format(x.previousTarget)}</span>` : ''}` : '–'}</td>
+          <td class="n">${u != null ? `<span class="${dir(u)}">${p0(u)}</span>` : ''}</td><td>${src(x)}</td></tr>`; }).join(''));
+    },
+    dealings() {
+      const I = B?.insiders;
+      return `${I ? `<p class="sub">Open-market trades of insiders, last 3 months: ${I.m3.buys} buys, ${I.m3.sells} sales · 12 months: ${I.m12.buys} buys, ${I.m12.sells} sales${I.plans ? ` · ${I.plans} grants and plan trades not counted` : ''}.${B.politicians.length ? ` Politicians, 12 months: ${B.politicians.length}.` : ''}</p>` : B?.politicians?.length ? `<p class="sub">Politicians, last 12 months: ${B.politicians.length}.</p>` : ''}`
+        + T(['Date', 'Who', 'Trade', '#Shares', '#Price', '#Value', ''], rows.map(x => `<tr><td>${esc(day(x.date))}</td>
+          <td>${esc(x.person)}${x.politician ? pill('politician') : ''}<span class="small muted">${esc(x.role ?? '')}</span></td>
+          <td><span class="${x.type === 'buy' ? 'up' : x.type === 'sell' ? 'down' : ''}">${esc(x.type)}</span>${x.plan ? ' <span class="small muted">plan</span>' : ''}${x.note ? `<span class="small muted">${esc(x.note)}</span>` : ''}</td>
+          <td class="n">${x.shares != null ? N0.format(x.shares) : esc(x.amount ?? '–')}</td><td class="n">${x.price != null ? `${nf(2, 2).format(x.price)} ${esc(sym$(x.currency))}` : '–'}</td>
+          <td class="n">${x.shares != null && x.price != null ? `${big$(x.shares * x.price)} ${esc(sym$(x.currency))}` : ''}</td><td>${src(x)}</td></tr>`).join(''));
+    },
+    people() {
+      return T(['Name', 'Role', 'Since', '#Pay', '#Shares', ''], rows.map(x => `<tr><td class="w"><b>${esc(x.name)}</b>${x.background ? `<span class="small muted">${esc(x.background)}</span>` : ''}</td>
+        <td>${esc(x.role)}</td><td>${esc(x.since ?? '')}</td>
+        <td class="n">${x.pay != null ? `${big$(x.pay)} €${x.payYear ? ` <span class="small muted">${esc(x.payYear)}</span>` : ''}${x.payNote ? `<span class="small muted">${esc(x.payNote)}</span>` : ''}` : '–'}</td>
+        <td class="n">${x.shares != null ? `${N0.format(x.shares)}${last ? `<span class="small muted">≈ ${big$(x.shares * last)} € today</span>` : ''}` : '–'}</td><td>${src(x)}</td></tr>`).join(''));
+    },
+    holders() {
+      return T(['Holder', '#Share', 'As of', 'Kind', ''], rows.map(x => `<tr><td class="w">${esc(x.name)}${x.note ? `<span class="small muted">${esc(x.note)}</span>` : ''}</td>
+        <td class="n">${nf(0, 2).format(x.pct)} %</td><td>${esc(day(x.date))}</td><td>${esc(x.kind)}</td><td>${src(x)}</td></tr>`).join(''));
+    },
+  };
+  box.innerHTML = `<div class="row" style="margin-bottom:8px"><div><h2>Company file</h2>
+      <p class="sub" style="margin:0">What no feed has for ${esc(d.name)}${F.updated ? ` · updated ${esc(day(F.updated))}` : ''} · every line with its source (↗)</p></div>
+      <button class="btn" id="f-edit" type="button">Edit</button></div>
+    <div class="seg" id="f-sec" style="margin:4px 0 10px;flex-wrap:wrap">${FILE.map(([k, l]) => `<button data-s="${k}" aria-pressed="${k === R.fsec}"${F[k]?.length ? '' : ' class="muted"'}>${l} ${F[k]?.length ?? 0}</button>`).join('')}</div>
+    ${rows.length ? view[R.fsec]() : `<p class="muted">Nothing saved under ${esc(FILE.find(([k]) => k === R.fsec)[1].toLowerCase())} yet.</p>`}
+    ${every.length > rows.length ? `<button class="btn" id="f-all" type="button" style="margin-top:8px">All ${every.length}</button>` : ''}
+    <p class="note">Saved on this machine: <b>${esc(path)}</b>. Filled by an agent through the MCP tool company_file, or here (Edit) - from the company's own releases and filings, regulators' registers (insider notices, stake disclosures, parliaments' trade reports) and named outlets for ratings. The read-out takes analysts, insiders (open market only), politicians, contracts, holders, the CEO and the next results date from it where no feed has them.</p>`;
+  box.querySelectorAll('#f-sec button').forEach(b => { b.onclick = () => { R.fsec = b.dataset.s; store.set('tro.rfile', R.fsec); renderFile(); }; });
+  $('#f-edit').onclick = () => { R.fedit = true; renderFile(); };
+  const fa = $('#f-all'); if (fa) fa.onclick = () => { R.fall = R.fsec; renderFile(); };
+}
+const p0 = v => `${v > 0 ? '+' : v < 0 ? '−' : ''}${N0.format(Math.abs(v))} %`;
+/** One section as JSON - the fields are in the note; saved as a whole file, checked by the server. */
+function renderFileEdit(box, F) {
+  const d = R.data, sec = FILE.some(([k]) => k === R.fsec) ? R.fsec : 'events';
+  const FIELDS = { contracts: 'date, customer, what, value, unit (m | bn), currency, share, kind (award | framework | acquisition | divestment | investment | supply | other), delivery, status (won | signed | pending | closed | completed | cancelled), segment, note, source',
+    people: 'name, role, since, background, pay (€ a year), payYear, payNote, shares, sharesAt, source',
+    dealings: 'date, person, role, politician (true | false), type (buy | sell | grant | exercise | other), shares, price, currency, amount (a range as filed), plan (true: an incentive plan), note, source',
+    holders: 'name, pct, date, kind (fund | state | company | founder | employees | treasury | other), note, source',
+    ratings: 'date, firm, rating (buy | hold | sell), ratingText (as published), target, previousTarget, currency, note, source',
+    events: 'date, title, kind (results | guidance | deal | contract | rating | legal | management | capital | risk | macro | other), note, source - a date ahead is a coming event' };
+  box.innerHTML = `<h2>Company file · edit</h2>
+    <div class="seg" id="f-sec" style="margin:4px 0 10px;flex-wrap:wrap">${FILE.map(([k, l]) => `<button data-s="${k}" aria-pressed="${k === sec}">${l}</button>`).join('')}</div>
+    <textarea id="f-json" spellcheck="false" style="width:100%;min-height:320px;font:12px/1.45 ui-monospace,Menlo,monospace;background:var(--raised);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px">${esc(JSON.stringify(F?.[sec] ?? [], null, 2))}</textarea>
+    <p class="note">A list of items, newest first is fine. Fields: ${esc(FIELDS[sec])}. Dates YYYY-MM-DD, sources as links.</p>
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" id="f-save" type="button">Save</button><button class="btn" id="f-cancel" type="button">Cancel</button></div>`;
+  box.querySelectorAll('#f-sec button').forEach(b => { b.onclick = () => { R.fsec = b.dataset.s; renderFile(); }; });
+  $('#f-cancel').onclick = () => { R.fedit = false; renderFile(); };
+  $('#f-save').onclick = async () => {
+    try {
+      let items;
+      try { items = JSON.parse($('#f-json').value || '[]'); } catch (e) { throw new Error(`not valid JSON: ${e.message}`); }
+      if (!Array.isArray(items)) throw new Error('a list: [ { … }, … ]');
+      const file = structuredClone((await api(`/api/dossier/${encodeURIComponent(d.isin)}`)).file) || {};
+      file[sec] = items;
+      await api(`/api/dossier/${encodeURIComponent(d.isin)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ file }) });
+      toast(`Saved to <b>data/dossier/${esc(d.isin)}.json</b>`);
+      openResearch(d.key);                          // the read-out takes from it too
     } catch (e) { toast(`<span class="down">${esc(e.message)}</span>`); }
   };
 }

@@ -248,6 +248,8 @@ const TOOLS = [
           by_year: Object.entries(r.pe.dates.reduce((o, d, i) => (r.pe.values[i] != null && (o[d.slice(0, 4)] ??= []).push(r.pe.values[i]), o), {}))
             .map(([year, v]) => (v.sort((x, y) => x - y), { year, low: r2(v[0]), middle: r2(v[Math.floor(v.length / 2)]), high: r2(v.at(-1)) })) },
         company_numbers: r.kpis && kpiOut(r.kpis),
+        company_file: r.dossier && { updated: r.dossier.file.updated, file: `data/dossier/${r.isin}.json`,
+          counts: Object.fromEntries(Object.entries(r.dossier.file).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v.length])) },
         // a year from today's price: bear / base / bull per lens, in % and euros - not a forecast
         scenarios: r.scenarios && { from_eur: r2(r.scenarios.last), squeeze: r.scenarios.squeeze,
           lenses: r.scenarios.lenses.map(l => ({ lens: l.label, bear_pct: r2(l.bear), base_pct: r2(l.base), bull_pct: r2(l.bull), eur: l.prices.map(r2), how: l.note })) },
@@ -288,6 +290,31 @@ const TOOLS = [
       const k = await app.kpis.get(key, next);
       return k.table ? { ...kpiOut(k.table), file: `data/kpis/${key}.json` }
                      : { none: true, file: `data/kpis/${key}.json`, note: 'No company numbers yet. Add metrics and a quarter with action save, from the company\'s own results release.' };
+    },
+  },
+  {
+    name: 'company_file',
+    description: 'A company\'s file: what no feed carries for it, saved on this machine in data/dossier/<ISIN>.json - contracts it announced, who runs it (CEO, board, pay, shares held), insiders\' and politicians\' trades, disclosed holders, analysts\' ratings and targets, events (past and coming: results dates, deals, legal, guidance). The research read-out uses it where no feed has the data: analysts (each firm\'s latest rating of 12 months, also for Up / down and the scenarios), insiders (open-market trades only; grants and plan trades left out), politicians, contracts of the last 12 months, holders, the CEO, the next results date. Every item with its `source` link; only from the company\'s own releases and filings, regulators\' registers (insider notices, stake disclosures, parliaments\' trade reports) or named outlets for ratings and events - never invented. get: the file and that brief. save: `sections` {contracts: [...], people: [...], dealings: [...], holders: [...], ratings: [...], events: [...]} - an item with the key of one already there replaces it (keys: contracts date+customer+what, people name, dealings date+person+type+shares+price, holders name+date, ratings date+firm, events date+title). remove: `section` and `match` (fields that must all equal).',
+    inputSchema: { type: 'object', required: ['stock'], properties: {
+      stock: { type: 'string', description: 'Name, ISIN or US ticker.' },
+      action: { type: 'string', enum: ['get', 'save', 'remove'], description: 'Default get.' },
+      sections: { type: 'object', description: 'save. Items per section - contracts: {date, customer, what, value, unit: "m"|"bn", currency, share, kind: award|framework|acquisition|divestment|investment|supply|other, delivery, status: won|signed|pending|closed|completed|cancelled, segment, note, source}; people: {name, role, since, background, pay (€ a year), payYear, payNote, shares, sharesAt, source}; dealings: {date, person, role, politician: bool, type: buy|sell|grant|exercise|other, shares, price, currency, amount (text, e.g. a Congress range), plan: bool (incentive/employee plan), note, source}; holders: {name, pct, date, kind: fund|state|company|founder|employees|treasury|other, note, source}; ratings: {date, firm, rating: buy|hold|sell, ratingText (as published), target, previousTarget, currency, note, source}; events: {date, title, kind: results|guidance|deal|contract|rating|legal|management|capital|risk|macro|other, note, source} - a date ahead is a coming event; kind results ahead = the next results day.' },
+      section: { type: 'string', enum: ['contracts', 'people', 'dealings', 'holders', 'ratings', 'events'], description: 'remove: which section.' },
+      match: { type: 'object', description: 'remove: e.g. {"date": "2026-10-07", "firm": "Jefferies"}.' },
+      full: { type: 'boolean', description: 'get: every item (default: the brief and counts, plus the newest 10 per section).' },
+    } },
+    async run(a) {
+      const { key } = await resolveStock(a.stock);
+      const action = a.action || 'get';
+      let removed;
+      if (action === 'save') await app.dossier.save(key, { sections: a.sections });
+      if (action === 'remove') ({ removed } = await app.dossier.remove(key, a.section, a.match));
+      const d = await app.dossier.get(key);
+      if (!d.file) return { none: true, file: d.path, note: 'No company file yet. Add items with action save, each with its source link.' };
+      const sections = Object.fromEntries(['contracts', 'people', 'dealings', 'holders', 'ratings', 'events'].map(s => [s, a.full ? d.file[s] : d.file[s].slice(0, 10)]));
+      return { company: d.file.company, updated: d.file.updated, file: d.path, ...(removed ? { removed } : {}),
+               counts: Object.fromEntries(Object.entries(d.file).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v.length])),
+               brief: d.brief, ...(a.full ? {} : { note: 'Newest 10 per section; full: true for all.' }), sections };
     },
   },
   {

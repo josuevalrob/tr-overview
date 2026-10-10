@@ -13,6 +13,7 @@ import { stories, newsNames, otherNames, localNews, venueNames, headlineNames } 
 import { readout, themes, naming, peAhead, upDown, score, results, scenarios } from '../lib/research.mjs';
 import { dropSpikes } from '../lib/market.mjs';
 import * as K from '../lib/kpis.mjs';
+import * as D from '../lib/dossier.mjs';
 import { sectorOf, mainListing, markFiled, mergeEstimates, fyLabel } from '../lib/analysis.mjs';
 import { pickSite } from '../lib/website.mjs';
 import { buysOf } from '../lib/congress.mjs';
@@ -680,6 +681,61 @@ check('research: scenarios - bear / base / bull a year out, three lenses, squeez
   assert.deepEqual(s.squeeze, { pct: 20, days: 2 });                     // 15 % or more sold short
   assert.equal(scenarios({ closes, last: 150, today: '2026-10-08', shortPct: 3, daysToCover: 1 }).squeeze, null);
   assert.equal(scenarios({ closes: [], last: 150, today: '2026-10-08' }), null);   // no lens, no chart
+});
+
+check('company file: items checked, one per key, the brief over fixed windows', () => {
+  const f = D.merge({ company: 'P', isin: 'IT0000000001' }, {
+    contracts: [{ date: '2026-09-01', customer: 'TSO', what: 'HVDC link', value: 1.6, unit: 'bn', kind: 'framework', source: 'https://a' },
+                { date: '2026-09-01', customer: 'TSO', what: 'HVDC link', value: 1.7, unit: 'bn', kind: 'framework', source: 'https://a2' },   // same key: replaces
+                { date: '2026-08-01', customer: 'US grid', what: 'cables', value: 110, unit: 'm', currency: 'USD', source: 'https://b' },
+                { date: '2026-10-01', customer: 'Target Inc', what: 'buy Target', value: 3.8, unit: 'bn', currency: 'USD', kind: 'acquisition', status: 'pending', source: 'https://c' },
+                { date: '2024-01-01', customer: 'Old', what: 'old award', value: 900, unit: 'm', source: 'https://d' }],
+    dealings: [{ date: '2026-09-20', person: 'CEO A', role: 'CEO', type: 'buy', shares: 1000, price: 120 },
+               { date: '2026-05-20', person: 'CFO B', role: 'CFO', type: 'sell', shares: 500, price: 110, plan: true },   // plan: not counted
+               { date: '2026-06-10', person: 'Dir C', role: 'director', type: 'grant', shares: 900 },                  // grant: not counted
+               { date: '2026-08-01', person: 'Rep X', role: 'US House', politician: true, type: 'sell', amount: '$1,001-$15,000' }],
+    ratings: [{ date: '2026-10-01', firm: 'Bank 1', rating: 'buy', target: 160 }, { date: '2026-06-01', firm: 'bank 1', rating: 'sell', target: 90 },
+              { date: '2026-09-01', firm: 'Bank 2', rating: 'hold', target: 130 }, { date: '2026-08-01', firm: 'Bank 3', rating: 'buy', target: 150 },
+              { date: '2025-01-01', firm: 'Bank 4', rating: 'sell', target: 50 }],                                       // over 12 months: out
+    events: [{ date: '2026-11-12', title: '9M results', kind: 'results' }, { date: '2026-10-07', title: 'deal vote', kind: 'deal' }],
+  }, '2026-10-10');
+  assert.equal(f.contracts.length, 4);
+  assert.equal(f.contracts.find(c => c.customer === 'TSO').value, 1.7);
+  assert.throws(() => D.merge(f, { ratings: [{ date: '10/01/2026', firm: 'X', rating: 'buy' }] }), /date YYYY-MM-DD/);
+  assert.throws(() => D.merge(f, { ratings: [{ date: '2026-10-01', firm: 'X', rating: 'strong buy' }] }), /one of buy hold sell/);
+  assert.throws(() => D.merge(f, { nonsense: [] }), /no section/);
+  assert.equal(JSON.stringify(D.clean(f)), JSON.stringify(f));             // cleaning a clean file changes nothing
+  const b = D.brief(f, { today: '2026-10-10', fx: { USD: 1.1 } });
+  assert.deepEqual(b.insiders.m12, { buys: 1, sells: 0, bought: 1000, sold: 0 });
+  assert.equal(b.insiders.plans, 2);
+  assert.equal(b.politicians.length, 1);
+  assert.deepEqual([b.analysts.n, b.analysts.buy, b.analysts.hold, b.analysts.sell], [3, 2, 1, 0]);   // each firm's latest, a year
+  assert.equal(Math.round(b.analysts.target), 147);
+  assert.equal(b.contracts.n, 2);                                          // the acquisition and the old award do not count
+  assert.equal(Math.round(b.contracts.eur / 1e6), 1800);                   // 1,7 bn € + 110 m $ at 1,10
+  assert.equal(b.contracts.pending[0].customer, 'Target Inc');
+  assert.equal(b.next.title, '9M results');
+  assert.equal(D.remove(f, 'ratings', { firm: 'BANK 1' }).removed, 2);
+});
+
+check('research: a company file stands in where no feed has analysts, insiders, the next results', () => {
+  const an = { key: 'IT0000000001', name: 'P', type: 'STOCK', isin: 'IT0000000001', profile: { ceo: { name: 'Anna Rossi', payRatio: 100 } }, annual: [], notes: [] };
+  const closes = Array.from({ length: 260 }, (_, i) => [new Date(Date.parse('2025-10-01') + i * 864e5).toISOString().slice(0, 10), 100]);
+  const file = D.brief(D.merge({}, {
+    ratings: ['A', 'B', 'C', 'D'].map((firm, i) => ({ date: `2026-09-0${i + 1}`, firm, rating: i < 3 ? 'buy' : 'hold', target: 130 })),
+    dealings: [{ date: '2026-09-20', person: 'Anna Rossi', role: 'CEO', type: 'buy', shares: 1000, price: 100 }],
+    people: [{ name: 'Anna Rossi', role: 'CEO', since: '2024', pay: 3e6, payYear: '2025', shares: 50000 }],
+    events: [{ date: '2026-11-12', title: '9M 2026 results', kind: 'results' }],
+  }, '2026-10-10'), { today: '2026-10-10' });
+  const r = readout({ an, closes, quote: { last: 100 }, today: '2026-10-10', file });
+  const pt = Object.fromEntries(r.points.map(p => [p.topic, p]));
+  assert.equal(pt.Analysts.tone, 'good');                                  // 3 of 4 buy, target +30 %
+  assert.match(pt.Analysts.text, /From its company file/);
+  assert.equal(Math.round(r.upDown.up), 30);                               // their target also sets Up / down
+  assert.equal(pt.Insiders.tone, 'good');
+  assert.match(pt.Insiders.text, /from its company file/);
+  assert.match(pt['Next results'].text, /9M 2026 results \(its company file\)/);
+  assert.match(pt.Management.text, /Holds 50 ?000 shares|Holds 50 Tsd|Holds 50/);
 });
 
 check('the MCP server and the web server parse', () => {

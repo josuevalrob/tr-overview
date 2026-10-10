@@ -27,6 +27,8 @@
  *   GET    /api/kpis/<isin>                            company numbers (data/kpis/<isin>.json) with your lines
  *   PUT    /api/kpis/<isin>      {file}                replace them
  *   PUT    /api/kpi-lines/<isin> {lines}               your green / red lines (data/kpi-lines.json)
+ *   GET    /api/dossier/<isin>                         its company file (data/dossier/<isin>.json) and what the read-out takes from it
+ *   PUT    /api/dossier/<isin>   {file} | {sections}   replace it, or add / replace items by their key
  *   GET    /api/search?q=SE                            name, ISIN or US ticker -> instruments
  *   GET    /api/history/<key>?from=YYYY-MM-DD          daily closes (EUR) for the price chart
  */
@@ -79,6 +81,11 @@ async function api(req, url) {
     const key = decodeURIComponent(part[1]);
     if (req.method === 'GET') return app.kpis.get(key, url.searchParams.get('next') || undefined);
     if (req.method === 'PUT') return app.kpis.save(key, { file: (await readJson(req)).file });
+  }
+  if (part[0] === 'dossier' && part[1]) {
+    const key = decodeURIComponent(part[1]);
+    if (req.method === 'GET') return app.dossier.get(key);
+    if (req.method === 'PUT') { const b = await readJson(req); return app.dossier.save(key, { file: b.file, sections: b.sections }); }
   }
   if (req.method === 'PUT' && part[0] === 'kpi-lines' && part[1]) return app.kpis.lines(decodeURIComponent(part[1]), (await readJson(req)).lines);
   if (req.method === 'GET' && part[0] === 'search') return { results: (await app.search(url.searchParams.get('q') || '')).slice(0, 8) };
